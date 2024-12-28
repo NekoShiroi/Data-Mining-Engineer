@@ -1,0 +1,13 @@
+{
+  "type": "service_account",
+  "project_id": "de-objec-assignment-fall2024",
+  "private_key_id": "924a25eba5a945b1408647e69e374e842a3bca58",
+  "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQCsmHJ9rqA3Udbw\nbUkYPDcMSVBqZvj8khe0ujN4rJeVMlZNUgJBlE6SfRosaCDkX+zee0KLNS/K2VDk\nHVy2OyHblaWTu5z1UfToTDQVgf8dJMxuXuwlIAlLS7WieIFxXUDY9VGO285NBwhZ\nVJ6EWY8Nw8o524SE+RcyR2XVh9Kouy58N04Z7xH0IZLhgEuWsCzoDeXiiV27DKZ+\nLMRvFMNILLaBvoDYIKw5thMQawdNmR+UBKL77NFUeHVoDivbOL6buH7Z/IatPJvF\nv3G8pp6r2+7zb3PuQ1K9V4Nm+TIOyBykvDhZRS3hHN05sPjXJkH/XR7WlB5xMH4w\n6eOKUFv9AgMBAAECggEADB6gW4b5pSjQCQ4Dhfoke25igTY94a54j65Lkvu7oTRp\nrwBFPEmnws2aGugs9xxtS6ooIBJaCsp7zajqK7m3RO4bNGaGPQvGQNGpDqGUQn2l\nBVMRDgJT5L+qP4BqxoUf2pxPX9K7h9koku1IPE71pqfK+YkaoyPCpzswQXBKMKLm\nqE6AfMqhmqOQIY3MFkhRKoIxRZGoSXesBcnqcWqcKP2ALTnNOhy6qZhoQ939QuHX\nguHx5Y5mmcUpIoz6Li9BQyrUQTyJhRNa7bQg/HKep37yTODCt+ZDi/vFcRN5EeR4\n6DXc+o95FmL5cfZ1lOXncE7w8X4CAijddd6vIBkGWQKBgQDgzh1OZFBkVWVW6St/\nP921UfvX8vYHWZNjtisWeRQ7/Ufu8+TuedFneL3OzyDC98o/2ir+0xp/2rP5HwIZ\nycjYFvAF7hZnx0K3CGnqOGRS8JOSvDEEk4ASuNOOyF9DxylyGhZ5RnC/iVP7irRn\n3zOSisdp9pw22qvrPU9VInAHZwKBgQDEi6iyNA4+9gGderosIEjDTjwfFSDc8Bsq\nqzHXKa1xnrAzp40dHADmuXTFEv5T3M+9+aFNaFUJCdt3EoaF0inzgxvyTFBT/S4S\nhKVfbrJ95s5S4UuV7HQRDcmiPjPmo25ypzKHwXn/35/y4Ec+kEk5SizVcuJ1w4cn\nb/rZPM/W+wKBgQDMo5QV6kcsLnhjlzobSf3+srS4rdi8dBQxboDmoi2DNlsm8Cnz\n1DyFHmpaOj6ufHZFjcoZ0f2LaYDvRATbiM4ltyujmkoXClJ231fa+J6KyajsqBdO\n/R5W7JzYmxntTv0xewH+P9se4Fns3yS+cXY27dH9aZpmbMSXDWaMLx8f/QKBgFZS\nwJUEJ/2fLrZr4LjgtRSSl/VO4lAnZMcoyYsm0vbEK7+EJ4ZRdlPfwFmOLgXHRba6\nnQ3SdQazPaDekhbUZ3h8bRnOSrmYyVN4zulLRTnm1Vexe/EtGQ0kcRrBFyqFPU0+\nAgN+BodLQIT73E6uMHrpCSf2fWAbsJCxrgsbmm1hAoGAIEZ+PJ/KPD49kNJLO7SD\nZ2NQXAkCdz+u+f87i09tMRv7On82dHVAeLhVJNf1EZiYM3poO8gNrx3Ah39Pu2Fd\nK5cht99xzlTzo0/QYoRHvBrMA91eGXky1eW2OlGjJEv9wCe/KTwJfMIN3i1CAiL9\n9XeIP7ZFjmH3MAP/uRQg7aA=\n-----END PRIVATE KEY-----\n",
+  "client_email": "storage-object-admin-access@de-objec-assignment-fall2024.iam.gserviceaccount.com",
+  "client_id": "114449854634466498072",
+  "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+  "token_uri": "https://oauth2.googleapis.com/token",
+  "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+  "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/storage-object-admin-access%40de-objec-assignment-fall2024.iam.gserviceaccount.com",
+  "universe_domain": "googleapis.com"
+}
