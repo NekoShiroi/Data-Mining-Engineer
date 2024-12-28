@@ -1,0 +1,397 @@
+---
+title: "Multilayerperceptron numeric prediction tutorial using RWeka"
+author: "Matt Pecsok"
+date: "October 2023"
+output: 
+  html_document:
+    number_sections: yes
+    toc: yes
+    fig_width: 15
+    fig_height: 10
+editor_options: 
+  chunk_output_type: inline
+---
+# Load packages and import insurance dataset
+```{r Set up and import data}
+# Load the following packages. Install them first if necessary.
+
+library(caret)
+library(RWeka)
+library(rminer)
+library(matrixStats)
+library(knitr)
+# upload tictoc to time the elapsed time of knitting this program. Install it if necessary.
+library(kernlab)
+library(tictoc)
+library(tidyverse)
+```
+
+```{r import data setups}
+tic() # start the timer
+
+# import data
+cloud_wd <- getwd()
+setwd(cloud_wd)
+insurance <- read.csv(file = "insurance.csv", stringsAsFactors = TRUE)
+
+
+###  Set up cv parameters
+
+df <- insurance
+target <- 7
+seedVal <- 500
+metrics_list <- c("MAE","RMSE","MAPE","RMSPE","RAE","RRSE","R2")
+
+str(insurance)
+
+```
+
+#  Examine trained neural network models with different number of hidden nodes in a hidden layer
+```{r Examined trained models}
+
+# Designate a shortened name MLP for the MultilayerPercentron ANN method in RWeka
+
+MLP <- make_Weka_classifier("weka/classifiers/functions/MultilayerPerceptron")
+
+### Review the commands, make_Weka_classifier and Weka_control, in online documents at
+### https://cran.r-project.org/web/packages/RWeka/RWeka.pdf
+### https://cran.r-project.org/web/packages/RWeka/vignettes/RWeka.pdf 
+
+MLP(expenses ~ .,data = insurance)
+
+### Linear Node 0 is the node that combines input from hidden layer nodes using a linear threshold or activation function. The weights are weights on the incoming links from the hidden layer nodes. The threshold here is the same as bias. Linear Node gives output to the Class Node.
+
+### Sigmoid Nodes 1 - 5 correspond to five hidden layer nodes with a Sigmoid activation function.  The weights are weights on the incoming links from the input attribute nodes. Threshold corresponds to the bias for the Sigmoid function. Five is derived from (1 output node + 9 input nodes)/2.
+
+### 9 input (Attrib) nodes (not explicitly shown) correspond to three numeric variables - age, bmi and children and six dummy variables - sex=male, somker=yes and region=northeast, region=northwest, region=southeast, region=wouthwest.
+
+### Review the parameters for the ANN method in RWeka - MultilayerPerceptron in this page - # http://weka.sourceforge.net/doc.dev/weka/classifiers/functions/MultilayerPerceptron.html
+#
+# MLP's default parameter values of MLP,L=0.3,M=0.2, N=500, H='a'
+# L: learning rate with default=0.3
+# M: momentum with default=0.2
+# N: number of epochs with default=500
+# H <comma separated numbers for nodes on each layer>
+  #The hidden nodes to be created on each layer:
+  # an integer, or the letters 'a' = (# of attribs + # of classes) / 2, 
+  #'i' = # of attribs, 'o' = # of classes, 't' = (# of attribs + # of classes)
+  # default of H is 'a'.
+
+```
+
+This is the same model as we would achieve without passing in parameters. 
+
+```{r model a}
+
+l <- 0.3
+m <- 0.2
+n <-500
+h <- 'a'
+
+# This MLP call creates the same model using default values
+
+model_a <- MLP(expenses ~ .,data = insurance,control = Weka_control(L=l,M=m, N=n,H=h))  
+
+model_a
+```
+# Try different H values
+
+```{r }
+model_0 <- MLP(expenses ~ .,data = insurance,control = Weka_control(L=l,M=m, N=n,H='0')) # wrapping in quotes works for explicity setting the numbers as well. 
+
+model_0
+```
+```{r }
+model_1 <- MLP(expenses ~ .,data = insurance,control = Weka_control(L=l,M=m, N=n,H=1))
+
+model_1
+```
+
+```{r }
+model_2 <- MLP(expenses ~ .,data = insurance,control = Weka_control(L=l,M=m, N=n,H=2))
+
+model_2
+```
+
+```{r }
+model_1_1 <- MLP(expenses ~ .,data = insurance,control = Weka_control(L=l,M=m, N=n,H='1,1'))
+
+model_1_1
+```
+```{r }
+model_2_2 <- MLP(expenses ~ .,data = insurance,control = Weka_control(L=l,M=m, N=n,H='2,2'))
+
+model_2_2
+```
+
+```{r}
+model_o <- MLP(expenses ~ .,data = insurance,control = Weka_control(L=l,M=m, N=n,H='o'))
+
+model_o 
+```
+
+```{r}
+model_i <- MLP(expenses ~ .,data = insurance,control = Weka_control(L=l,M=m, N=n,H='i'))
+
+model_i
+```
+```{r}
+
+model_t <- MLP(expenses ~ .,data = insurance,control = Weka_control(L=l,M=m, N=n,H='t'))
+
+model_t
+```
+
+```{r}
+model_11 <- MLP(expenses ~ .,data = insurance,control = Weka_control(L=l,M=m, N=n,H=11))
+
+model_11
+```
+# Build an ANN model with two layers of hidden nodes
+
+```{r}
+model_11_11 <- MLP(expenses ~ .,data = insurance,control = Weka_control(L=l,M=m, N=n,H='11,11'))
+
+model_11_11
+```
+
+# Take a look at training performance on the entire dataset. 
+
+This could be overfit, to ensure we interpret correctly examining output on the train and test sets should be done. 
+
+'a' has quite a high MAE, far worse than our tree models such as regression tree, model tree and also worse than linear regression. 
+```{r}
+summary(model_a)
+```
+again, quite poor performance for '0'
+```{r}
+summary(model_0)
+```
+again, quite poor performance for 'o'
+```{r}
+summary(model_o) 
+```
+again, quite poor performance for 'i' though we've improved over the previous examples
+```{r}
+summary(model_i) 
+```
+again, quite poor performance for 't' though we've improved over the previous examples
+```{r}
+summary(model_t) 
+```
+
+```{r}
+summary(model_11)
+```
+
+```{r}
+summary(model_11_11)
+```
+
+
+
+# Define a named function for  MLP cross validation
+
+```{r Define a user-defined, named function for CV of MLP with control parameters}
+
+cv_function_MLP <- function(df, target, nFolds, seedVal, metrics_list, l, m, n, h)
+{
+# create folds using the assigned values
+
+set.seed(seedVal)
+folds = createFolds(df[,target],nFolds)
+
+# The lapply loop
+
+cv_results <- lapply(folds, function(x)
+{ 
+# data preparation:
+
+  test_target <- df[x,target]
+  test_input <- df[x,-target]
+  
+  train_target <- df[-x,target]
+  train_input <- df[-x,-target]
+  pred_model <- MLP(train_target ~ .,data = train_input,control = Weka_control(L=l,M=m, N=n,H=h))  
+  pred <- predict(pred_model, test_input)
+  return(mmetric(test_target,pred,metrics_list))
+})
+
+cv_results_m <- as.matrix(as.data.frame(cv_results))
+cv_mean<- as.matrix(rowMeans(cv_results_m))
+cv_sd <- as.matrix(rowSds(cv_results_m))
+colnames(cv_mean) <- "Mean"
+colnames(cv_sd) <- "Sd"
+cv_all <- cbind(cv_results_m, cv_mean, cv_sd)
+kable(t(cbind(cv_mean,cv_sd)),digits=2)
+}
+```
+
+# Define a named function for SVM cross validation
+
+```{r Define a user-defined, named function for CV of ksvm with control parameters}
+
+cv_function_ksvm <- function(df, target, nFolds, seedVal, metrics_list, kern, c)
+{
+# create folds using the assigned values
+
+set.seed(seedVal)
+folds = createFolds(df[,target],nFolds)
+
+# The lapply loop
+
+cv_results <- lapply(folds, function(x)
+{ 
+# data preparation:
+
+  test_target <- df[x,target]
+  test_input <- df[x,-target]
+  
+  train_target <- df[-x,target]
+  train_input <- df[-x,-target]
+   pred_model <- ksvm(train_target ~ .,data = train_input,kernel=kern,C=c)  
+  pred <- predict(pred_model, test_input)
+  return(mmetric(test_target,pred,metrics_list))
+})
+
+cv_results_m <- as.matrix(as.data.frame(cv_results))
+cv_mean<- as.matrix(rowMeans(cv_results_m))
+cv_sd <- as.matrix(rowSds(cv_results_m))
+colnames(cv_mean) <- "Mean"
+colnames(cv_sd) <- "Sd"
+kable(t(cbind(cv_mean,cv_sd)),digits=2)
+}
+```
+
+# Call cv_function_MLP with different learning rates, momentums and numbers of epoches
+
+```{r }
+
+# different numbers of hidden layer nodes
+tic()
+cv_function_MLP(df, target, 5, seedVal, metrics_list, 0.05, 0.1, 600, '10')
+cv_function_MLP(df, target, 5, seedVal, metrics_list, 0.005, 0.1, 600, '10')
+toc()
+
+```
+
+
+
+
+
+
+```{r }
+
+# different numbers of hidden layer nodes
+
+cv_function_MLP(df, target, 5, seedVal, metrics_list, 0.05, 0.1, 600, '5,3')
+cv_function_MLP(df, target, 5, seedVal, metrics_list, 0.005, 0.1, 600, '5,3')
+
+
+```
+
+```{r }
+
+# different numbers of hidden layer nodes
+tic()
+cv_function_MLP(df, target, 5, seedVal, metrics_list, 0.05, 0.1, 600, '10')
+cv_function_MLP(df, target, 5, seedVal, metrics_list, 0.005, 0.1, 600, '10')
+toc()
+
+```
+
+
+```{r }
+# different numbers of hidden layer nodes
+tic()
+cv_function_MLP(df, target, 5, seedVal, metrics_list, 0.005, 0.1, 2000, '10')
+cv_function_MLP(df, target, 5, seedVal, metrics_list, 0.005, 0.1, 2000, '15,8')
+toc()
+```
+
+
+
+```{r}
+ksvm(expenses ~ .,data = insurance)  # taking the defaults for SVM
+```
+
+
+
+```{r }
+
+### Compare two misclassification costs
+
+tic()
+cv_function_ksvm(df, target, 5, seedVal, metrics_list, 'rbfdot', 1)
+cv_function_ksvm(df, target, 5, seedVal, metrics_list, 'rbfdot', 10)
+cv_function_ksvm(df, target, 5, seedVal, metrics_list, 'rbfdot', 7)
+toc()
+
+```
+
+
+```{r }
+
+tic()
+cv_function_ksvm(df, target, 5, seedVal, metrics_list, 'laplacedot', 1)
+cv_function_ksvm(df, target, 5, seedVal, metrics_list, 'laplacedot', 10)
+cv_function_ksvm(df, target, 5, seedVal, metrics_list, 'laplacedot', 7)
+toc()
+
+```
+
+
+
+
+# Grid Search
+
+Clearly the number of hyperparameters is infinite. We cannot test them all and it's a lot of work to do this manually.
+We can create a grid of hyperparameter combinations and iterate over that rather than doing so manually.
+
+```{r}
+# Create multiple vectors
+param_C <- c(seq(1,4))
+param_kernel <- c("rbfdot", "laplacedot")
+
+# Generate a grid of all combinations
+grid <- expand.grid(param_C, param_kernel, stringsAsFactors = FALSE)
+
+colnames(grid) <- c("C","kernel")
+# Print the grid
+
+grid
+```
+
+Grid Search
+
+This is fairly unsophisticated, but it shows how we might go about testing many combinations. 
+
+```{r}
+for (i in 1:nrow(grid)) {
+  row <- grid[i, ]  # Get the i-th row
+  print(paste(row$kernel, row$C))
+  print(cv_function_ksvm(df, target, 5, seedVal, metrics_list, row$kernel, row$C))
+}
+```
+
+
+Random Grid Search
+
+What if the number of hyperparameter combinations is huge?
+
+Randomly sample the dataframe. 
+
+```{r}
+
+# the random sampling
+sampled_df <- grid %>% sample_n(3)
+sampled_df
+
+
+for (i in 1:nrow(sampled_df)) {
+  row <- sampled_df[i, ]  # Get the i-th row
+  print(paste(row$kernel, row$C))
+  print(cv_function_ksvm(df, target, 5, seedVal, metrics_list, row$kernel, row$C))
+}
+```
+

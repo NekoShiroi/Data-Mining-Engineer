@@ -1,0 +1,70 @@
+---
+title: "data_partitioning"
+author: "Matt Pecsok"
+date: "2023-07-12"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(caret)
+```
+
+# Introduction to data splitting
+```{r import the data}
+sample_dataset <- read.csv("data_partitioning.csv")
+```
+
+Let's assume the same as the Excel video of a
+.8 = Train
+.2 = Test
+
+# A Naive Data Splitting Approach
+```{r simple approach}
+
+train_set <- sample_dataset[1:16,]
+test_set <- sample_dataset[17:20,]
+
+```
+
+```{r split and create 4 total vars}
+
+train_input <- sample_dataset[1:16,-1]
+train_target <- sample_dataset[1:16,1]
+
+test_input <- sample_dataset[17:20,-1]
+test_target <- sample_dataset[17:20,1]
+
+
+```
+
+
+# A Robust Data Splitting Approach
+
+```{r simple createDataPartition}
+index_numbers_split <- createDataPartition(sample_dataset$Target_y,p=.8,list = FALSE)
+```
+
+
+```{r}
+
+train_set <- sample_dataset[index_numbers_split,]
+test_set <- sample_dataset[-index_numbers_split,]
+
+```
+
+```{r}
+
+train_input <- sample_dataset[index_numbers_split,-1]
+train_target <- sample_dataset[index_numbers_split,1]
+
+test_input <- sample_dataset[-index_numbers_split,-1]
+test_target <- sample_dataset[-index_numbers_split,1]
+
+```
+
+```{r}
+prop.table(table(train_target))
+prop.table(table(test_target))
+```
+

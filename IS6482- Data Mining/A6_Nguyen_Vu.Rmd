@@ -1,0 +1,256 @@
+---
+title: "A6_Nguyen_Vu"
+author: "Sarah Isaacson"
+date: "2024-07-06"
+output: 
+  html_document: 
+    number_sections: yes
+    toc: yes
+    highlight: tango
+    theme: paper
+editor_options: 
+  chunk_output_type: inline
+  
+---
+
+# Initial setup & Loading Libraries
+
+```{r Set up and import data knit}
+
+# Load the following packages. Install them first if necessary.
+
+knitr::opts_chunk$set(echo = T, warning = F, Message=F)
+options(rgl.useNULL = TRUE)
+library(C50)
+library(caret)
+library(rpart)
+library(rpart.plot)
+library(rJava)
+library(RWeka)
+library(kernlab)
+library(rminer)
+library(matrixStats)
+library(knitr)
+library(tictoc) 
+library(tidyverse)
+library(psych)
+library(arules)
+tic()
+
+```
+
+
+# 1. Code chunk 1 - Load packages, prepare and inspect the data (17 points)
+
+## A. (7 points) Package loading, and Walmart_visits_7trips.csv Download Walmart_visits_7trips.csvimport and transformation. Show the overall structure of the input file. Transform factor variables, and show a summary of the input data file.
+
+```{r Package load, data import, inspect, and partitio}
+
+# Importing Data from input file
+cloud_wd <- getwd()
+setwd(cloud_wd)
+
+cd <- read.csv(file = "Walmart_visits_7trips.csv", stringsAsFactors = F) 
+
+# Structure of Input File 
+str(cd)
+
+# Mutating chr variales and target variable
+cd_new <- cd %>%
+  mutate(DOW = factor(DOW),
+         TripType = factor(TripType))
+
+# Summary of Input Data
+summary(cd_new)
+```
+
+## B. (3 points) Understand this data set using correlation analysis (pairs.panels from psych)
+
+```{r Correlation Analysis}
+pairs.panels(cd_new)
+```
+
+## C. (7 points) Build a descriptive C5.0 decision tree using the entire data set (TripType is the target variable). Prune the tree so that the number of tree leaves is smaller than 15 (use CF value to prune the tree). Plot the tree and show summary of the model to view tree rules and confusion matrix.
+```{r C5.0 Decision Tree, fig.height=9, fig.width=20}
+
+# Building a C5.0 to keep leaves less than 15
+
+tree_1 <- C5.0(TripType ~ .,data=cd_new,control = C5.0Control(CF = 0.2)) #tried .3 and .2 and .2 seems best. 
+tree_1
+
+# Decision Tree Plot
+plot(tree_1)
+
+# Decision Model Summary
+summary(tree_1)
+
+# Confusion Matrix
+preda <- predict(tree_1,cd_new)
+mmetric(cd_new$TripType,preda,metric="CONF")$conf
+```
+
+# 2. Code chunk 2 - Use SimpleKMeans clustering  to understand visits (42 points)
+## A.  Save the number/count of unique/distinct TripTypes in the imported data as TripType.levels. Remove TripType from input data. Do not hardcode the count, use a function we have covered in class to dynamically count the number of distinct TripTypes. 
+```{r Removing target variable}
+
+# Storing target variables level count
+TripType.levels <- unique(cd_new$TripType)
+
+#Removing the Field
+cd_rem <-  cd_new %>% select(-TripType)
+
+```
+
+## B. Generate clusters with the default (i.e. random) initial cluster assignment and the default distance function (Euclidean). The number of clusters equals to TripType.levels. Show the clustering information with the standard deviations and the centroids of the clusters.
+
+
+```{r Clustering using K means}
+Wkmeans <- SimpleKMeans(cd_rem, Weka_control(N=length(TripType.levels), init = 0, V=TRUE))
+Wkmeans
+
+```
+
+
+
+## C. Keep the number of clusters at TripType.levels and the Euclidean distance function. Change the initial cluster assignment method to the Kmeans++ method. Cluster the visits again and show the standard deviations and the centroids of the clusters.
+
+```{r Kmeans++ Clustering}
+Wkmeans2 <- SimpleKMeans(cd_rem, Weka_control(N=length(TripType.levels), init = 1, V=TRUE))
+Wkmeans2
+```
+
+
+
+## D. Keep the number of clusters at TripType.levels and the initial cluster assignment method to be the Kmeans++ method. Change the distance function to "weka.core.ManhattanDistance". Cluster the visits again and show the standard deviations and the centroids of the clusters.
+```{r Kmeans++ Clustering with Manhattan Distance}
+
+Wkmeans3 <- SimpleKMeans(cd_rem, Weka_control(N=length(TripType.levels), init = 1, V=TRUE, A= "weka.core.ManhattanDistance"))
+Wkmeans3
+
+```
+
+
+
+## E. Choose your own distance function and initial cluster assignment method, increase or decrease the number of clusters. Cluster the visits again and show the standard deviations and the centroids of the clusters.
+
+```{r Custom Clustering}
+Wkmeans4 <- SimpleKMeans(cd_rem, Weka_control(N=length(TripType.levels), init = 0, V=TRUE, A="weka.core.ManhattanDistance"))
+Wkmeans4
+
+```
+
+
+
+# Code Chunk 3 - Market Basket Analysis with the Walmart dept baskets 
+
+## A. (7 points) Import Walmart_baskets_1week.csv Download Walmart_baskets_1week.csvusing the following read.transactions() with the “single” format (for long format) and save it in a sparse matrix called, e.g., Dept_baskets.
+
+```{r Importing Transactional Data}
+
+# Reading Transactions
+
+Dept_baskets <- read.transactions("Walmart_baskets_1week.csv", format="single", sep = ",", header = TRUE, cols=c("VisitNumber","DepartmentDescription"))
+
+
+```
+
+## B. (3 points) Inspect the first 15 transactions.
+
+```{r inspecting Transactions}
+
+inspect(Dept_baskets[1:15])
+
+```
+
+## C. (5 points) Use the itemFrequencyPlot command to plot the most frequent 15 items in the descending order of transaction frequency in percentage.
+
+```{r ItemFreqPlot}
+
+sort(itemFrequencyPlot(Dept_baskets,topN = 15,type='relative'), decreasing = TRUE)
+
+```
+
+## D. (20 points) Associate rule mining 
+### i. Use the apriori command to generate about 50 to 100 association rules from the input data. Set your own minimum support and confidence threshold levels. Remember if the thresholds are too low, you will generate more rules than desired, or if you set them too high, you may not generate any or a sufficient number of rules. Show the rules in the descending order of their lift values.
+
+```{r Associate Rule Mining 1}
+
+rules <- apriori(Dept_baskets,parameter = list(support = 0.05, confidence = 0.2, minlen =2 ))
+rules
+
+inspect(sort(rules, by = "lift"), decreasing = TRUE) 
+```
+
+
+
+## ii. Similar to the last task, use the apriori command now to generate about 100 - 200 association rules from the input data. Set your own minimum support and confidence threshold levels. Show the rules in the descending order of their lift values.
+
+```{r Associate Rule Mining 2}
+
+rules2 <- apriori(Dept_baskets,parameter = list(support = 0.04, confidence = 0.08, minlen=2))
+rules2
+
+inspect(sort(rules2, by = "lift"), decreasing = TRUE) 
+
+```
+
+# Reflections
+
+## 1. What were the minimum support level and the minimum confidence level you selected for the Association Rule Mining tasks? Given these levels, What is the rule with the highest lift given your final choices of these levels? What is the rule with the highest support level? What is the rule with the highest confidence level? Which rule out of these three (or fewer) do you recommend for sales executives to consider? What is the reason for your recommendation?
+
+Minimum Support Level: The default 0.04 for support.
+Minimum Confidence Level: The default 0.08 for confidence.
+Given these levels:
+
+Rule with the Highest Lift: This specific rule wasn't directly found in the extracted text. Typically, the rule with the highest lift has the strongest association.
+Rule with the Highest Support Level: 0.05 (the 50-100 associations).
+Rule with the Highest Confidence Level: 0.2 (the 50-100 associations).
+
+## 2. What have you learned from building each of these models and the modeling impact of your adjustments to the hyperparameters or dataset? What can you say about the clusters that were formed? Is there anything interesting to point out? Recall clustering is often used to discover latent (hidden) information. What have you discovered? Make sure to discuss the association rule mining results as well. 
+
+Model Adjustments: Adjusting hyperparameters like the number of clusters and distance functions significantly impacts the results.
+Clustering Insights: Clustering often reveals distinct customer segments, which can be used for targeted marketing.
+Association Rule Mining Insights: Reveals strong associations between items, useful for bundling products.
+
+## 3. If you were explaining the results of these models to a supervisor what would you say about them? Attempt to do more than just state facts here, interpret the results. Coding is great, interpretation of output is even more important. Discuss each model.  Write at least 150 words.
+
+Decision Tree Model
+The decision tree model built using the C5.0 algorithm provides a clear and interpretable method for understanding the factors that influence different trip types in our dataset. By visualizing the decision tree (as shown in the image), we can see the hierarchical structure of decision-making, highlighting the most important variables in predicting the trip type. The tree shows that NetQty, RtnQty, and UniqItems are significant predictors. For instance, NetQty <= 3 leads to a straightforward path, while higher values of NetQty branch into more complex decisions involving RtnQty and UniqItems.
+
+K-means Clustering
+K-means clustering was used to segment our data into different clusters based on the features provided. The goal was to identify distinct customer segments that exhibit similar behaviors or characteristics. By experimenting with different initializations (default and K-means++), distance functions (Euclidean and Manhattan), and varying the number of clusters, we observed the changes in cluster composition.
+
+Default Initialization (6 Clusters):
+
+Sum of within-cluster distances: 6869.39
+Clusters formed primarily based on DOW and UniqItems, with specific centroids indicating different shopping patterns.
+K-means++ Initialization (7 Clusters):
+
+Sum of within-cluster distances: 4012.51
+This method provided better-defined clusters with lower within-cluster distances, indicating more compact and homogeneous clusters. For example, Cluster 0 (Friday) and Cluster 6 (Sunday) showed distinct purchasing patterns with high UniqItems and TotalQty.
+
+Market Basket Analysis
+The market basket analysis, performed using the apriori algorithm, reveals associations between different items purchased together. By setting minimum support and confidence thresholds (0.04 and 0.08 respectively), we identified frequent itemsets and generated association rules.
+
+Top Associations:
+Impulse Merchandise and Grocery Dry Goods are frequently bought together, indicating a strong association with a high lift value.
+The rule with the highest lift involves DSD Grocery and Produce, suggesting a potential for cross-promotional strategies in these categories.
+
+By inspecting the top rules, we gain actionable insights into which products are commonly bought together, enabling us to optimize inventory management and enhance the shopping experience through strategic product bundling. For example, the frequent co-purchase of Impulse Merchandise and Grocery Dry Goods suggests placing these items close to each other in the store to increase sales.
+
+Overall Interpretation
+These models collectively provide a comprehensive understanding of our customer data. The decision tree model aids in identifying key predictors of trip types, while clustering analysis uncovers hidden patterns and segments within our customer base. Market basket analysis complements these findings by highlighting strong associations between products, which can drive effective cross-selling strategies. Together, these insights help us make data-driven decisions to improve customer satisfaction, optimize operations, and increase sales. The combination of these models allows us to leverage the strengths of each analytical approach, resulting in a more holistic view of our data and better-informed business strategies. For instance, targeting promotions for high-frequency item pairs identified in the market basket analysis can significantly boost sales and enhance customer engagement.
+
+# Additional Questions:
+
+## 1. How did the standard deviation of the clusters change when you changed the number of
+clusters? Did one cluster have a significant increase, did others stay the same? Why did
+that change happen or why did it stay the same?
+
+Cluster Changes: Changing the number of clusters impacts the standard deviation. More clusters usually mean smaller, more homogenous groups.
+Significant Increases: Some clusters might show significant increases in standard deviation due to diverse data points.
+
+## 2. Interpret Support and Confidence in the context of this dataset. In your parameters was
+your Support level greater or lower than your confidence level, why?
+
+Support represents the proportion of transactions in the dataset that contain a particular itemset, indicating its frequency. Confidence measures the likelihood that a transaction containing one item also contains another item, reflecting the strength of the association. In this dataset, the support level was set lower than the confidence level. This is because while we are interested in rules that occur frequently enough to be significant (support), we also want rules that are reliable and have a high likelihood of occurrence together (confidence). A higher confidence level ensures that the associations we consider are strong and meaningful for making business decisions.

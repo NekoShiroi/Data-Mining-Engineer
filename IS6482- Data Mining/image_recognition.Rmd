@@ -1,0 +1,161 @@
+---
+title: "image_recognition"
+author: "Matt Pecsok"
+date: "2023-10-26"
+output: 
+  html_document: 
+    toc: yes
+    number_sections: yes
+---
+
+MNIST is a set of digitized handwritten digits from 0-9. It's a classic image recognition task that has seen amazing increases in accuracy over the years with convolution neural networks scoring ~ 99% accuracy. 
+
+Each digit is an image of pixels 28x28 in grayscale. Including the target variable the dataset is 1 target variable and 784 columns wide. 
+
+We'll explore a simple neural network, a more complex network and a decision tree to compare performance. 
+
+
+
+# Import Libraries
+
+```{r}
+library(caret)
+library(RWeka) # You MUST have Java installed for this to load Properly.
+library(rminer)
+library(C50)
+library(ggplot2)
+library(reshape2)
+library(kernlab)
+
+```
+# Import Data, Factorize Target
+```{r}
+mnist_train_small <- read.csv("mnist_train_small.csv")
+
+# factorize the target variable
+mnist_train_small$X6 <- factor(mnist_train_small$X6)
+```
+
+Summarize just a few of the columns.
+
+The grayscale numbers range from 0 to 255 with 255 representing black, and 0 representing white. 
+```{r summary}
+summary(mnist_train_small[,c(1,2,3,4,5,6,258,456,701)])
+```
+
+```{r str}
+str(mnist_train_small[,c(1,2,3,4,5,6,258,456,701)])
+```
+
+# Image Plot
+
+```{r image plot, paged.print=FALSE}
+options(width = 300)
+
+digit <- mnist_train_small[1054,1]
+print(digit)
+single_row <- mnist_train_small[1054,-1]  # First row as an example
+
+
+image_matrix <- matrix(as.numeric(single_row), nrow = 28, byrow = TRUE)
+image_matrix <- t(apply(image_matrix, 2, rev))
+
+print(image_matrix)
+
+melted_image <- melt(image_matrix)
+
+ggplot(data = melted_image, aes(x = Var1, y = Var2, fill = value)) +
+  geom_tile() +
+  scale_fill_gradient(low = "white", high = "black") +
+  coord_fixed(ratio = 1) +
+  theme_minimal() +
+  theme(axis.text = element_blank(),
+        axis.ticks = element_blank(),
+        axis.title = element_blank(),
+        legend.position = "none")
+```
+
+```{r}
+MLP <- make_Weka_classifier("weka/classifiers/functions/MultilayerPerceptron")
+```
+
+
+```{r}
+set.seed(500)
+inTrain <- createDataPartition(mnist_train_small$X6,p=0.8,list=FALSE)
+
+trainSet <- mnist_train_small[inTrain,]
+testSet <- mnist_train_small[-inTrain,]
+
+
+```
+
+# mlp h=4 and 50 epoch. 
+
+With only a few epochs and a simple hidden layer we achieve low performance in the model. 
+```{r}
+set.seed(500)
+model_mlp_h4 <- MLP(X6 ~ .,data = trainSet,control = Weka_control(L=0.03,M=.001, N=50,H='4'))
+```
+
+```{r}
+pred_mlp_4_train <- predict(model_mlp_h4, trainSet)
+mmetric(trainSet$X6,pred_mlp_4_train,metric="ACC")
+pred_mlp_4_test <- predict(model_mlp_h4, testSet)
+mmetric(testSet$X6,pred_mlp_4_test,metric="ACC")
+```
+
+
+# mlp h=64,64 and 50 epochs.
+
+That's passing ~20,000 observations though the model 50 times!
+50 iterations of the feed forward and backpropogation. Notice that even though the number of epochs is the same as the first model the training time is substantially longer due to the complexity in the hidden layers. Many more weight updates to calculate. 
+
+tensorflow or pytorch with a GPU would train substantially faster. 
+
+95% accuracy! Not bad. 
+```{r}
+set.seed(500)
+model_mlp_64_64 <- MLP(X6 ~ .,data = trainSet,control = Weka_control(L=0.03,M=.001, N=50,H='64,64'))
+```
+
+
+```{r}
+pred_mlp_64_64_train <- predict(model_mlp_64_64, trainSet)
+mmetric(trainSet$X6,pred_mlp_64_64_train,metric="ACC")
+pred_mlp_64_64_test <- predict(model_mlp_64_64, testSet)
+mmetric(testSet$X6,pred_mlp_64_64_test,metric="ACC")
+```
+
+
+# Decision Tree 
+
+The decision tree trains quite fast comparatively. It also achieves performance 10% lower that the more complex MLP model. 
+
+```{r}
+set.seed(500)
+model_tree <- C5.0(X6 ~ .,data = trainSet)
+```
+
+```{r}
+model_tree$size
+```
+It's quite a complex tree. How well can it perform on this image data?
+
+
+```{r}
+pred_train_tree <- predict(model_tree, trainSet)
+mmetric(trainSet$X6,pred_train_tree,metric="ACC")
+pred_test_tree <- predict(model_tree, testSet)
+mmetric(testSet$X6,pred_test_tree,metric="ACC")
+```
+# Decision Tree Confusion Matrix
+
+```{r}
+mmetric(trainSet$X6,pred_train_tree,metric="CONF")$conf
+mmetric(testSet$X6,pred_test_tree,metric="CONF")$conf
+```
+
+
+
+

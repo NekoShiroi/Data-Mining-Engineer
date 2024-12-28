@@ -1,0 +1,367 @@
+---
+title: "NB titanic tutorial"
+author: "Matt Pecsok"
+date: "August 16, 2023"
+output: 
+  html_document:
+    number_sections: yes
+    toc: yes
+editor_options: 
+  chunk_output_type: inline
+---
+
+# Setups and EDA 
+
+## Data Description
+
+The sinking of the RMS Titanic is one of the most infamous shipwrecks in history.
+On April 15, 1912, during her maiden voyage, the Titanic sank after colliding with 
+an iceberg, killing 1502 out of 2224 passengers and crew.
+This sensational tragedy shocked the international community and led to better 
+safety regulations for ships.One of the reasons that the shipwreck led to such 
+loss of life was that there were not enough lifeboats for the passengers and crew. 
+Although there was some element of luck involved in surviving the sinking, 
+some groups of people such as women, children, and the upper-class 
+were more likely to survive than others.
+
+VARIABLE DESCRIPTIONS:
+
+PassengerID     Unique passenger identifier
+Survived        Survival (0 = No; 1 = Yes)
+Pclass          Passenger Class(1 = 1st; 2 = 2nd; 3 = 3rd) (Pclass is a proxy for socio-economic status (SES)
+                     1st ~ Upper; 2nd ~ Middle; 3rd ~ Lower)
+Name            Name
+Sex             Sex
+Age             Age (Age is in Years; Fractional if Age less than One (1) If the Age is Estimated, it is in the form xx.5)
+Sibsp           Number of Siblings/Spouses Aboard
+Parch           Number of Parents/Children Aboard
+Ticket          Ticket Number
+Fare            Passenger Fare
+Cabin           Cabin
+Embarked        Port of Embarkation (C = Cherbourg; Q = Queenstown; S = Southampton)
+
+## Set up, data import and inspections
+
+```{r - Set up, data import and inspections}
+
+# Load packages after they have been installed
+# Package loading. Install the following packages before running this chunk or knitting this program.
+
+library(e1071)
+library(psych)
+library(caret)
+library(rminer)
+library(rmarkdown)
+library(tictoc) 
+library(tidyverse)
+tic()
+```
+
+## Data Import 
+
+```{r data import}
+# Import titanic_cleaned.csv file
+cloud_wd <- getwd()
+setwd(cloud_wd)
+
+titanic <- read.csv(file = "titanic_cleaned.csv", stringsAsFactors = FALSE)
+```
+
+
+## Examine the overall data frame
+
+```{r structure and summary}
+str(titanic)
+summary(titanic)
+```
+
+
+## Change Survived and other nominal variables to factors. 
+
+Re-examine the over data frame afterwards.
+
+```{r factorize categorical columns}
+titanic$Survived <- factor(titanic$Survived)
+titanic$Sex <- factor(titanic$Sex)
+titanic$Pclass <- factor(titanic$Pclass)
+titanic$Cabin <- factor(titanic$Cabin)
+titanic$Embarked <- factor(titanic$Embarked)
+```
+
+```{r check factorization}
+str(titanic)
+summary(titanic)
+```
+
+# Model1 = w1 NB model all columns
+
+building using e1071 package
+
+```{r NB model building}
+# e1071 includes a naiveBayes algorithm to build a Naive Bayesian classification model
+# e1071 documentation - https://cran.r-project.org/web/packages/e1071/e1071.pdf
+
+# Run ?naiveBayes to find out more information about naiveBayes 
+
+titanic_w1_nb <- naiveBayes(### YOU  DO formula syntax ####)
+```
+
+## Take a look at the conditional probability tables of nominal predictors and Means and Sds of numeric predictors for the titanic NB model
+```{r show model}
+titanic_w1_nb
+```
+
+## alternatively using Xy syntax:
+```{r use }
+titanic_w1_nb <- naiveBayes(x = titanic[,-1],y = titanic[,1])
+titanic_w1_nb
+```
+
+```{r predict on whole dataset}
+table(predict(titanic_w1_nb, titanic), titanic[,1])
+```
+
+```{r prop tables of target and predictors}
+# You can use prop.table anytime to generate the conditional probability table of factor variables
+# Check out the results from prop.table(table(titanic$Survived, titanic$Sex))
+# The following commands generate the probabilities of a factor variable conditioned on the target variable
+prop.table(table(titanic$Sex, titanic$Survived), 2) %>% round(2)
+prop.table(table(titanic$Embarked, titanic$Survived), 2) %>% round(2)
+prop.table(table(titanic$Pclass, titanic$Survived), 2) %>% round(2)
+# prop.table(table(titanic$Cabin, titanic$Survived), 2)
+```
+
+# Model2 = w1 model without cabin column
+```{r remove cabin}
+# An alternative naiveBayes call to build the same model.
+# The 1st argument in naiveBayes() specifies the predictors to be used.
+# The 2nd argument indicates the target variable.
+# Let's remove Cabin.
+
+titanic_w2_nb <- naiveBayes(### YOU  DO Xy syntax, make sure to drop cabin and target from X ####)
+titanic_w2_nb
+
+```
+
+# Explanatory data exploration
+
+Notice here that 
+
+MANY More Females survived than did not survive. We might suspect this to be statistically significant based on the large numbers of observations and the large differences.
+
+MANY More Men did not survive than did survive. Again, We might suspect this to be statistically significant based on the large numbers of observations and the large differences.
+
+Also notice the mean difference in Fares between Survived/Did not Survive. 
+
+These are just a few examples. Can you see any more? 
+
+```{r Data exploration} 
+# Examine predictors' correlations conditioning on Survived
+
+# Separate Survived from Died
+
+titanic0 <- subset(titanic, Survived == "0")
+summary(titanic0)
+titanic1 <- subset(titanic, Survived == "1")
+summary(titanic1)
+```
+Most predictors are weakly correlated. SibSp and Parch are the most strongly correlated.
+
+```{r pairs panels by target}
+# Plot predictors' correlations by class
+
+pairs.panels(titanic0[-1] %>% select(is.numeric))
+pairs.panels(titanic1[-1]  %>% select(is.numeric))
+```
+
+# Generate performance metrics
+
+```{r w1 Generate performance metrics}
+
+# Evaluate titanic_w1
+
+#predicted_Survived_w1 <- predict(titanic_w1_nb, titanic) # simply uncomment to run
+
+mmetric(titanic$Survived, predicted_Survived_w1, metric="CONF")
+
+mmetric(titanic$Survived, predicted_Survived_w1, metric=c("ACC","TPR","PRECISION","F1"))
+```
+
+```{r w2 Generate performance metrics}
+# Evaluate titanic_w2
+
+predicted_Survived_w2 <- predict(titanic_w2_nb, titanic)
+
+mmetric(titanic$Survived, predicted_Survived_w2, metric="CONF")
+
+mmetric(titanic$Survived, predicted_Survived_w2, metric=c("ACC","TPR","PRECISION","F1"))
+```
+
+# Simple hold-out evaluation
+
+```{r Simple hold-out evaluation}
+# Examine the impacts of simple hold-out evaluation and feature selection
+
+# Only knowing the model's training performance is not sufficient. Let's try a simple hold-out evaluation. 
+
+# Use createDataPartition() in caret package to split titanic 50%-50% into a train set and a test set
+
+# set seed to a value for createDataPartition(). With the same value and input, 
+# the partitions output will be consistent each time the following commands are executed.
+
+set.seed(100)
+inTrain <- createDataPartition(titanic$Survived, p=0.5, list=FALSE)
+
+# inTrain is a list of indices to the rows in the titanic data frame
+# Assign the rows in titanic indexed by inTrain to create a train set
+# Assign all other rows indexed by -inTrain to ccreate a test set
+
+titanicTrain <- titanic[inTrain,]
+titanicTest <- titanic[-inTrain,]
+```
+
+```{r train test summary}
+# Examine the distributions of the target variable and other attriutes of train and test sets
+# Make sure that they are consistent between train and test sets.
+
+summary(titanicTrain)
+summary(titanicTest)
+```
+The splitting kept the balance if 0,1 in both sets
+```{r table of train and test}
+table(titanicTrain$Survived)
+table(titanicTest$Survived)
+```
+
+```{r prop table train and test}
+prop.table(table(titanicTrain$Survived))
+prop.table(table(titanicTest$Survived))
+```
+
+# Use the train set to build a model
+
+```{r train set model}
+titanic_m1_nb <- naiveBayes(Survived~., titanicTrain)
+titanic_m1_nb
+```
+
+
+```{r predict on test}
+# Apply the model to the hold-out test set and generate holdout evaluation metrics
+
+predicted_Survived_test1 <- predict(titanic_m1_nb, titanicTest)
+
+mmetric(titanicTest$Survived, predicted_Survived_test1, metric="CONF")
+
+mmetric(titanicTest$Survived, predicted_Survived_test1, metric=c("ACC","TPR","PRECISION","F1"))
+```
+
+```{r predict on train }
+# For comparison, apply the model to the train set and generate evaluation metrics. 
+# Check out the performance drop in the holdout set.
+
+predicted_Survived_train1 <- predict(titanic_m1_nb, titanicTrain)
+
+mmetric(titanicTrain$Survived, predicted_Survived_train1, metric="CONF")
+
+mmetric(titanicTrain$Survived, predicted_Survived_train1, metric=c("ACC","TPR","PRECISION","F1"))
+```
+
+### Remove Cabin
+```{r move cabin and build model}
+# Use the train set to build a model
+
+titanic_m2_nb <- naiveBayes(titanicTrain[c(-1,-8)], titanicTrain$Survived)
+titanic_m2_nb
+```
+
+```{r test set}
+# Apply the model to the hold-out test set and generate holdout evaluation metrics
+
+predicted_Survived_test2 <- predict(titanic_m2_nb, titanicTest)
+
+mmetric(titanicTest$Survived, predicted_Survived_test2, metric="CONF")
+
+mmetric(titanicTest$Survived, predicted_Survived_test2, metric=c("ACC","TPR","PRECISION","F1"))
+```
+
+
+```{r train predictions}
+# For comparison, apply the model to the train set and generate evaluation metrics. 
+# Check out the performance drop in the holdout set.
+
+predicted_Survived_train2 <- predict(titanic_m2_nb, titanicTrain)
+
+mmetric(titanicTrain$Survived, predicted_Survived_train2, metric="CONF")
+
+mmetric(titanicTrain$Survived, predicted_Survived_train2, metric=c("ACC","TPR","PRECISION","F1"))
+
+# End of NaiveBayesian Titanic Tutorial
+
+```
+# Cross Validation
+
+## Define cv_function
+
+```{r Define cv_function}
+# create a callable cv_function with input arguments for re-use with different input arguments
+
+cv_function <- function(df, target, nFolds, seedVal, classification, metrics_list)
+{
+
+  set.seed(seedVal)
+  folds = createFolds(df[,target],nFolds)
+  # folds
+ 
+ cv_results <- lapply(folds, function(x)
+ { 
+   train <- df[-x,-target]
+   test  <- df[x,-target]
+   
+   train_target <- df[-x,target]
+   test_target <- df[x,target]
+   
+   classification_model <- classification(train,train_target) 
+   
+   pred<- predict(classification_model,test)
+   
+   return(mmetric(test_target,pred,metrics_list))
+ })
+ 
+ cv_results_m <- as.matrix(as.data.frame(cv_results))
+
+ cv_mean<- as.matrix(rowMeans(cv_results_m))
+ 
+ colnames(cv_mean) <- "Mean"
+ 
+ cv_sd <- as.matrix(rowSds(cv_results_m))
+ 
+ colnames(cv_sd) <- "Sd"
+ 
+ cv_all <- cbind(cv_results_m, cv_mean, cv_sd)
+ 
+ kable(cv_all,digits=2)
+}
+```  
+
+
+## Call the cross validation function. 3 fold. 
+
+Notice how we are passing variables for metrics_list and for classification. For target folds and seed we are passing literals.
+
+```{r cross validation 3 fold}
+
+metrics_list <- c("ACC","PRECISION","TPR","F1")
+
+# the order here is unimportant because we have passed named arguments. 
+
+## YOU DO. change the target to the correct column number. and choose a value for the number of folds for Cross-Validation. 
+
+cv_function(metrics_list =  metrics_list, 
+            df = titanic, 
+#            target = X, 
+#            nFolds = X, 
+            seed = 1234,
+            classification =  naiveBayes)
+
+```

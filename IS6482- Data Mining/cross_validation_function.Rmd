@@ -1,0 +1,248 @@
+---
+title: "cross_validation_function"
+author: "Matt Pecsok"
+date: "August 16, 2023"
+output: 
+  html_document:
+    number_sections: yes
+    toc: yes
+editor_options: 
+  chunk_output_type: inline
+---
+
+
+
+## Setup and overall data inspection
+```{r Setup and overall data inspection}
+# Package loading. Install the following packages before running this chunk or knitting this program.
+
+library(e1071)
+library(psych)
+library(caret)
+library(rminer)
+library(rmarkdown)
+library(matrixStats)
+library(knitr)
+
+```
+
+
+
+## R already has an iris_local data frame. Examine the overall data frame
+```{r iris_local local}
+iris_local <- iris
+```
+
+## str of iris_local
+
+```{r structure and summary}
+str(iris_local)
+```
+
+
+# Cross Validation
+
+## Step 1 - All Hardcoded Code. 3-fold CV
+
+createFolds returns TEST set indices. Remember in cross validation each index is used in the TEST set only ONCE. Those same indexes will be in multiple TRAIN sets. 
+
+```{r splitting the dataset k = 3 times}
+set.seed(1234)
+
+folds = createFolds(y= iris_local$Species,k = 3)
+
+folds
+
+```
+There are about 50 in each fold. 
+
+```{r count instances in each fold}
+# we use lapply and length function to count each of the 3 vectors in the list. 
+lapply(folds,length)
+
+```
+We already know how to subset a dataframe by indices, but just as a quick refresher. 
+
+Exclude Fold1 in Train1.
+
+Wow, that's a lot of redundant code. There must be an easier way?
+
+```{r}
+train_1 <- iris_local[-folds$Fold1 , -5] # NOT fold 1 indices sent to train 1
+train_2 <- iris_local[-folds$Fold2 , -5] # NOT fold 2 indices sent to train 2
+train_3 <- iris_local[-folds$Fold3 , -5] # NOT fold 3 indices sent to train 3
+
+train_target_1 <- iris_local[-folds$Fold1 , 5] # target extraction
+train_target_2 <- iris_local[-folds$Fold2 , 5] # target extraction
+train_target_3 <- iris_local[-folds$Fold3 , 5] # target extraction
+
+test_1 <- iris_local[folds$Fold1 , -5] # fold 1 indices sent to test 1 
+test_2 <- iris_local[folds$Fold2 , -5] # fold 2 indices sent to test 2
+test_3 <- iris_local[folds$Fold3 , -5] # fold 3 indices sent to test 3 
+
+test_target_1 <- iris_local[folds$Fold1 , 5] # target extraction
+test_target_2 <- iris_local[folds$Fold2 , 5] # target extraction
+test_target_3 <- iris_local[folds$Fold3 , 5] # target extraction
+
+```
+
+```{r train the 3 models}
+
+nb1 <- naiveBayes(x = train_1,y = train_target_1)
+nb2 <- naiveBayes(x = train_2,y = train_target_2)
+nb3 <- naiveBayes(x = train_3,y = train_target_3)
+
+```
+
+```{r predict on test for each of 3 models}
+metrics_list <- c("ACC","TPR","PRECISION","F1")
+
+predicted_species_test <- predict(nb1, test_1)
+mmetric(test_target_1, predicted_species_test, metric=metrics_list)
+
+predicted_species_test <- predict(nb2, test_2)
+mmetric(test_target_2, predicted_species_test, metric=metrics_list)
+
+predicted_species_test <- predict(nb3, test_3)
+mmetric(test_target_3, predicted_species_test, metric=metrics_list)
+```
+# Step 2 - LAPPLY - More Dynamic - 3-fold CV
+
+
+```{r using lapply to run model for each fold}
+
+
+set.seed(1234)
+
+target <- 5
+nFolds <- 3
+
+# 3 folds
+folds = createFolds(iris_local[, target], nFolds)
+
+# this code will run 3 times, once for each fold in the list.
+cv_results <- lapply(folds, function(x)
+{
+  train <- iris_local[-x, -target]
+  test  <- iris_local[x, -target]
+  
+  train_target <- iris_local[-x, target]
+  test_target <- iris_local[x, target]
+  
+  classification_model <- naiveBayes(x = train, y = train_target)
+  
+  pred <- predict(classification_model, test)
+  
+  return(mmetric(test_target, pred, metrics_list))
+})
+
+cv_results
+```
+the following code takes cv_results from the previous code block and computes mean and standard deviation for each metric. 
+
+```{r add mean and sd}
+
+# this code simply creates a dataframe and adds mean and sd to it.
+cv_results_m <- as.matrix(as.data.frame(cv_results))
+
+
+cv_mean <- as.matrix(rowMeans(cv_results_m))
+
+colnames(cv_mean) <- "Mean"
+
+cv_sd <- as.matrix(rowSds(cv_results_m))
+
+colnames(cv_sd) <- "Sd"
+
+cv_all <- cbind(cv_results_m, cv_mean, cv_sd)
+
+kable(cv_all, digits = 2)
+ 
+```
+
+
+
+
+
+# Step 3 - Named/User Defined Function 
+
+## Define cv_function
+
+```{r Define cv_function}
+# create a callable cv_function with input arguments for re-use with different input arguments
+
+cv_function <- function(df, target, nFolds, seedVal, classification, metrics_list)
+{
+
+  set.seed(seedVal)
+  folds = createFolds(df[,target],nFolds)
+  # folds
+ 
+ cv_results <- lapply(folds, function(x)
+ { 
+   train <- df[-x,-target]
+   test  <- df[x,-target]
+   
+   train_target <- df[-x,target]
+   test_target <- df[x,target]
+   
+   classification_model <- classification(train,train_target) 
+   
+   pred<- predict(classification_model,test)
+   
+   return(mmetric(test_target,pred,metrics_list))
+ })
+ 
+ # this code simply creates a dataframe and adds mean and sd to it.
+ cv_results_m <- as.matrix(as.data.frame(cv_results))
+
+ cv_mean<- as.matrix(rowMeans(cv_results_m))
+ 
+ colnames(cv_mean) <- "Mean"
+ 
+ cv_sd <- as.matrix(rowSds(cv_results_m))
+ 
+ colnames(cv_sd) <- "Sd"
+ 
+ cv_all <- cbind(cv_results_m, cv_mean, cv_sd)
+ 
+ kable(cv_all,digits=2)
+}
+```  
+
+
+## Call the cross validation function. 3 fold. 
+
+Notice how we are passing variables for metrics_list and for classification. For target folds and seed we are passing literals.
+
+```{r cross validation 3 fold}
+
+metrics_list <- c("ACC","PRECISION","TPR","F1")
+
+# the order here is unimportant because we have passed named arguments. 
+
+cv_function(metrics_list =  metrics_list, 
+            df = iris, 
+            target = 5, 
+            nFolds = 3, 
+            seed = 1234,
+            classification =  naiveBayes)
+
+```
+## Call the cross validation function. 5 fold. 
+
+```{r cross validation 5 fold}
+
+# the order here is unimportant because we have passed named arguments. 
+
+cv_function(metrics_list =  metrics_list, 
+            df = iris, 
+            target = 5, 
+            nFolds = 5, 
+            seed = 1234,
+            classification =  naiveBayes)
+
+```
+
+
+

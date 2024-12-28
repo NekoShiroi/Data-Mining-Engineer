@@ -1,0 +1,357 @@
+---
+title: "A7_Isaacson_Sarah"
+author: "Sarah Isaacson"
+date: "2024-07-20"
+output: 
+  html_document: 
+    number_sections: yes
+    toc: yes
+    highlight: tango
+    theme: paper
+editor_options: 
+  chunk_output_type: inline
+---
+
+
+# Initial setup & Loading Libraries
+
+```{r Set up and import data knit}
+
+# Load the following packages. Install them first if necessary.
+
+knitr::opts_chunk$set(echo = T, warning = F, Message=F)
+options(rgl.useNULL = TRUE)
+library(e1071)
+library(C50)
+library(caret)
+library(rpart)
+library(rpart.plot)
+library(rJava)
+library(RWeka)
+library(kernlab)
+library(rminer)
+library(matrixStats)
+library(knitr)
+library(tictoc) 
+library(tidyverse)
+library(psych)
+library(ggplot2)    
+library(scales)   
+library(corrplot)   
+tic()
+
+```
+
+
+# Package load, data import, inspection, and partitioning
+
+## Package Loading and Census Data
+
+```{r Package load, data import, inspection, and partitioning}
+
+# Importing Data from input file
+cloud_wd <- getwd()
+setwd(cloud_wd)
+
+cd <- read.csv(file = "census.csv", stringsAsFactors = T) 
+
+# Structure 
+str(cd)
+summary(cd)
+
+```
+
+## Correlation Analysis
+
+```{r Correlation Analysis}
+
+# Using pairpanels on numeric predictors
+cd %>% select(where(is.numeric)) %>% pairs.panels()
+
+```
+
+
+## Exploratory data Analysis
+
+After Exploration, We find that the variable education.num should be a factor to better understand our data.
+
+```{r}
+
+cd <- cd %>% 
+  mutate(education.num = factor(education.num))
+
+
+```
+
+```{r}
+
+# Checking for NA
+(cd %>% summarize(across(everything(), ~ sum(is.na(.)))))
+
+# Box plots for age
+cd %>%
+  ggplot()+
+  geom_boxplot(aes(x =y,y=age))+
+  ggtitle(" y ~ age")
+
+# Using histogram to see skewed nature of Capital Gain
+hist((cd$capital.gain), xlab = 'Capital gain ', ylab = 'Count', main = 'Capital Gain')
+
+# Using histogram to see skewed nature of Capital Loss
+hist((cd$capital.loss), xlab = 'Capital Loss ', ylab = 'Count', main = 'Capital Loss')
+
+# Logging Capital gain and Capital Loss
+cd_log <- cd %>% 
+  mutate(capital.gain = log(capital.gain), 
+         capital.loss = log(capital.loss))
+hist((cd_log$capital.gain), xlab = 'Capital gain ', ylab = 'Count', main = 'Capital Gain')
+
+
+```
+
+```{r Dist Table}
+
+# Marital status against y proportion
+prop.table(table(cd$marital.status, cd$y))*100
+
+# Relationship against y 
+prop.table(table(cd$relationship, cd$y))*100
+
+# workclass against y 
+prop.table(table(cd$workclass, cd$y))*100
+
+# education against y 
+prop.table(table(cd$education, cd$y))*100
+
+# sex against y 
+prop.table(table(cd$sex, cd$y))*100
+
+# native country against y 
+prop.table(table(cd$native.country, cd$y))*100
+
+```
+
+```{r sex distribution}
+
+# Distribution of income on basis of sex
+
+cd %>% 
+  group_by(y, sex) %>% 
+  summarise(Count= n()) %>% 
+  ggplot() + 
+  geom_col(aes(x=sex, y=Count, fill = y)) + 
+  ggtitle("Sex - y")
+
+```
+
+```{r income distribution}
+
+#Simple distribution of income classification
+plot(cd$y,xlim = c(0, 5),  ylim = c(0,25000), main = "Distribution of y")
+
+```
+
+### Majority Classifier
+
+```{r y distribution table}
+
+# percentage distribution of income - y in data set
+
+prop.table(table(cd$y))*100
+
+```
+
+The accuracy of the majority classifier will be 75.9% where our majority is "<=50K"
+
+## Comment
+
+Target Variable - Categorical
+All Known Modelling Algorithms
+
+Decision tree C5.0
+Naive Bayes
+Ibk KNN
+RPart
+MLP
+KSVM
+Clustering K Means
+Linear Regression ( Not for classification)
+M5P in RWeka ( Not for classification)
+
+
+Suitable for categorical:
+Naive Bayes 
+C5.0
+Rpart
+KNN
+KSVM
+MLP (complex)
+
+
+# Cross Validation
+
+```{r Cross Validation}
+
+# 1.Randomly sample 70% of the rows
+set.seed(100)
+
+# Data Partitioning set
+inTrain <- createDataPartition(y=cd$y, p = 0.70, list=FALSE)
+train_target <- cd[inTrain,15]
+test_target <- cd[-inTrain,15]
+train_input <- cd[inTrain,-15]
+test_input <- cd[-inTrain,-15]
+
+```
+
+## Evaluation and Proportion of target variable
+
+```{r Dividing data into train fold and validation fold}
+
+# creating a vector with evaluation metrics.
+
+tree_metrics <- c("ACC","F1","PRECISION","TPR")
+
+cd %>% pull(y) %>% table() %>% prop.table() %>% round(2)
+prop.table(table(train_target))*100
+prop.table(table(test_target))*100
+
+
+```
+## Cross Validation Function
+
+```{r Cross validation function}
+
+cv_function <- function(df, target, nFolds, seedVal, prediction_method, metrics_list)
+{
+  # create folds
+  set.seed(seedVal)
+  folds = createFolds(df[,target],nFolds) 
+  # perform cross validation
+  cv_results <- lapply(folds, function(x)
+  { 
+    test_target <- df[x,target]
+    test_input  <- df[x,-target]
+
+    train_target <- df[-x,target]
+    train_input <- df[-x,-target]
+
+    prediction_model <- ksvm(train_target~.,train_input) 
+    pred<- predict(prediction_model,test_input)
+    return(mmetric(test_target,pred,metrics_list))
+  })
+  # generate means and sds and show cv results, means and sds using kable
+  cv_results_m <- as.matrix(as.data.frame(cv_results))
+  cv_mean<- as.matrix(rowMeans(cv_results_m))
+  cv_sd <- as.matrix(rowSds(cv_results_m))
+  colnames(cv_mean) <- "Mean"
+  colnames(cv_sd) <- "Sd"
+  cv_all <- cbind(cv_results_m, cv_mean, cv_sd)
+  kable(t(cv_all),digits=2)
+}
+
+```
+
+# Modelling Data
+
+## C5.0 Decision Tree
+
+```{r C5.0 Decision Tree}
+
+# Using multiple Cost Factors
+
+# CF = 0.85  acc = 86.00
+# CF = 0.45  acc = 86.50
+# Cf = 0.30  acc = 86.7
+# CF = 0.20  acc = 86.86
+# CF = 0.08  acc = 86.5
+
+dtree <- C5.0(train_input, train_target, control = C5.0Control(CF=0.08, earlyStopping = FALSE, noGlobalPruning = FALSE))
+tree_test <- predict(dtree, test_input)
+
+#tree size
+dtree$size
+
+summary(dtree)
+
+mmetric(test_target, tree_test, metric=tree_metrics)
+
+C5imp(dtree)
+
+```
+
+## Naive Bayes Model
+
+```{r NaiveBayes Model}
+
+
+cd_nb <- naiveBayes(train_target ~ ., data = train_input)
+nb_pred <- predict(cd_nb, test_input)
+mmetric(test_target, nb_pred, metric=tree_metrics)
+
+
+```
+
+## Recursive Partitioning - rpart ( For Classification)
+
+```{r rpart model}
+
+# Rpart model
+rpart_cd <- rpart(train_target~., data = train_input)
+rpart_pred <- predict(rpart_cd, test_input)
+mmetric(test_target, rpart_pred, tree_metrics)
+
+```
+
+## KNN Algorithm using iBK
+
+```{r knn-ibk model}
+
+#K Nearest Neighbours using Ibk
+
+ibk <- IBk(train_target ~ .,data = train_input, control = Weka_control(K=45,X=TRUE, I=TRUE))
+ibk_pred_test <- predict(ibk, test_input)
+mmetric(test_target, ibk_pred_test, tree_metrics)
+
+```
+
+## Support Vector Machine or KSVM
+
+```{r ksvm}
+
+# Ksvm model or KVSM model
+
+ksvm <- ksvm(train_target ~ .,data = train_input, kernel = "laplacedot", C=4)
+ksvm_pred <- predict(ksvm, test_input)
+mmetric(test_target, ksvm_pred, tree_metrics)
+
+```
+
+The C5.0 decision tree model outperformed five alternatives with 86.5% accuracy and superior interpretability, making it ideal for identifying key classification factors. We will validate these results using 5-fold cross-validation.
+
+
+# Reflections
+
+
+Our research aims to classify individuals by economic level using variables like age, education, and occupation. Data preparation included converting categorical features and normalizing skewed numerical ones. The log value was utilized to normalize the heavily skewed capital gain and capital loss feature. The majority class (<=50k) comprises 75.9% of the dataset.We plotted the correlation of numerical features using the pairs panel. 
+
+For the prediction, we evaluated 5 different models. 
+
+- c5.0 Decision Tree : Acc - 86.5
+
+- Naive Bayes Model : Acc - 82.5
+
+- RPart tree : ACc - 83.8 
+
+- KNN - K Nearest Neighbors Algorithm : Acc - 83.5
+
+- SVM - Support Vector Machine : Acc - 85.5
+
+We evaluated five prediction models: C5.0 Decision Tree, Naive Bayes, RPart tree, KNN, and SVM. The C5.0 model achieved the highest accuracy (86.5%) and was selected for its interpretability, allowing us to understand decision splits and predictor importance.
+
+Capital gain emerged as the most crucial feature, accounting for 95.06% of the model's importance alongside capital loss. If limited to a single predictor, capital gain would be the most informative.
+
+Our model significantly outperforms a random classifier (50%) or a majority class baseline (75.9%), demonstrating its predictive power. It excels at identifying individuals with low income (<=50k).
+
+Incorrectly classifying a low-income person as high-income could lead to missed sales or potential financial hardship for the individual due to loan burdens.
+

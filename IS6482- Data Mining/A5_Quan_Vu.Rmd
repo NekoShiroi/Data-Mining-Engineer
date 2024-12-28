@@ -1,0 +1,178 @@
+---
+title: |
+  | Vu Nguyen
+  | Professor Dan Li
+  | CSCD 429
+  | Due 11/12/2024
+author: "Lab 2"
+output: pdf_document
+fontsize: 12
+header-includes:
+- \usepackage{titling}
+- \pretitle{\begin{flushleft}}
+- \posttitle{\end{flushleft}}
+editor_option:
+  chunk_output_type: inline
+---
+
+#Installing libraries
+
+```{r install}
+install.packages('rpart',repos='https://cran.r-project.org/web/packages/rpart/rpart.pdf')
+install.packages('caret',repos='https://cran.r-project.org/web/packages/caret/caret.pdf')
+install.packages('rpart.plot',repos='https://cran.r-project.org/web/packages/rpart.plot/rpart.plot.pdf')
+install.packages('ISLR2',repos='https://cran.r-project.org/web/packages/ISLR2/ISLR2.pdf')
+```
+# Libraries
+
+```{r library}
+library(rpart)
+library(caret)
+library(rpart.plot)
+library(ISLR2) 
+```
+
+
+ The sinking of the RMS Titanic is one of the most infamous shipwrecks in history.
+ On April 15, 1912, during her maiden voyage, the Titanic sank after colliding with 
+ an iceberg, killing 1502 out of 2224 passengers and crew.
+ This sensational tragedy shocked the international community and led to better 
+ safety regulations for ships.One of the reasons that the shipwreck led to such 
+ loss of life was that there were not enough lifeboats for the passengers and crew. 
+ Although there was some element of luck involved in surviving the sinking, 
+ some groups of people such as women, children, and the upper-class 
+ were more likely to survive than others.
+
+ VARIABLE DESCRIPTIONS:
+
+ PassengerID     Unique passenger identifier
+ Survived        Survival (0 = No; 1 = Yes)
+ Pclass          Passenger Class(1 = 1st; 2 = 2nd; 3 = 3rd) (Pclass is a proxy for socio-economic status (SES)
+                     1st ~ Upper; 2nd ~ Middle; 3rd ~ Lower)
+ Name            Name
+ Sex             Sex
+ Age             Age (Age is in Years; Fractional if Age less than One (1) If the Age is Estimated, it is in the form xx.5)
+ Sibsp           Number of Siblings/Spouses Aboard
+ Parch           Number of Parents/Children Aboard
+ Ticket          Ticket Number
+ Fare            Passenger Fare
+ Cabin           Cabin
+ Embarked        Port of Embarkation (C = Cherbourg; Q = Queenstown; S = Southampton)
+
+
+ ---------------------------------------------------------------------------
+# Part I: Experiments using mushroom data
+## Step 1: Import a csv file
+
+```{r Set up, data import and inspection}
+
+cloud_wd <- getwd()
+setwd(cloud_wd)
+mushroom <- read.csv(file = "mushrooms.csv", stringsAsFactors = FALSE)
+```
+
+
+## Step 2: Examine the overall data frame
+
+### 1) (2 points) From the output of str(), what do you find regarding variable “veil_type”? Do you think it is a potentially useful variable for classification? Why? How would you deal with it during data preprocessing phase? Include the corresponding R command you used.
+
+```{r structure aka str of mushroom}
+str(mushroom)
+summary(mushroom)
+```
+```{r veiltype investigate}
+str(mushroom$veil_type)
+unique(mushroom$veil_type)
+```
+It has only one unique value, it may not be useful for classification. If veil_type has a single unique value, we can remove it as it doesn’t provide any distinguishing information.
+```{r remove veiltype}
+mushroom <- mushroom[, !names(mushroom) %in% "veil_type"]
+str(mushroom)
+```
+### 2a) (2 point) Now create a contingency table for variable “odor”. You can retrieve and save the number of rows and number of coloumns of a data frame
+
+
+```{r table odor}
+# Contingency table for odor vs. class
+ct_odor_type <- table(mushroom$odor, mushroom$type)
+ct_odor_type
+```
+### 2b) (2 points) What do you learn from the above table? Use Chi-square test to verify your answer.
+```{r chisquare test for odor vs type}
+# Chi-square test for odor vs. class
+chisq.test(table(mushroom$odor, mushroom$type))
+```
+X-squared = 7659.7: This is the test statistic. A high value here generally suggests a strong association between the variables.
+
+p-value < 2.2e-16: The p-value is extremely small (essentially zero), which means we reject the null hypothesis that odor and type are independent.
+
+
+### 3) (2 points) Split the data into a training set (80%) and a test set (20%) using simple random sampling without replacement. The training set will be used to build the Decision Tree model and the test set will be used to validate the efficiency of the model.
+
+```{r data split}
+set.seed(100)
+index_numbers_split <- createDataPartition(mushroom$type,p=.8,list = FALSE)
+train_set <- mushroom[index_numbers_split,] #partition the 80% to the train set 
+test_set <- mushroom[-index_numbers_split,] #simply get the rest of the set and make it test set (20% from the 100%)
+```
+
+## Step 3: Building and testing a decision tree model.
+
+### 1) (3 points) Build a decision tree using the training data set and display the tree. (Package “rpart” reference can be found at https://cran.r-project.org/web/packages/rpart/rpart.pdf. Package “rpart.plot” reference can be found at https://cran.r-project.org/web/packages/rpart.plot/rpart.plot.pdf.
+
+```{r building model}
+# Building the decision tree model
+tree_model <- rpart(train_set$type ~ ., data = train_set)
+# Displaying the tree
+rpart.plot(tree_model)
+```
+
+### 2) (2 points) Test the above decision tree model using the test data set, and use confusion matrix to display the performance of your model. Use your own words to explain the overall performance of your model.
+
+```{r test prediction}
+# Making predictions
+predictions <- predict(tree_model, test_set, type="class")
+```
+```{r confusion matrix}
+test_set$type <- factor(test_set$type)
+# Confusion matrix Test models
+confusionMatrix(predictions, test_set$type)
+```
+The model demonstrates outstanding performance, with nearly perfect sensitivity and high specificity. With an accuracy of 99.32% and high predictive values, this model is reliable for classifying mushroom types accurately.
+
+# Part II: Experiments using Auto data from ISLR2 library
+
+Auto data is inside ISLR2 library. If you already installed and loaded this library probably, you should be able to use it for the following experiments.
+
+## Step 0: Use View(Auto) to look the data you are going to play with.
+```{r view autodb}
+View(Auto)
+```
+
+## Step 1: Build a simple linear regression model and interpret the output.
+
+### 1) (2 points) Use the lm() function to perform a simple linear regression with mpg as the response and horsepower as the predictor. Then use the summary() function to print the results.
+
+```{r linear regression}
+# Building a linear regression model
+model <- lm(mpg ~ horsepower, data = Auto)
+
+# Displaying the summary of the model
+summary(model)
+```
+
+### 2) (2 points) Is there a relationship between the predictor and the response? How strong is the relationship between the predictor and the response? Is the relationship between the predictor and the response positive or negative?
+
+This model suggests a moderately strong negative relationship between horsepower and mpg, where an increase in horsepower is associated with a decrease in miles per gallon. The model explains around 60.6% of the variance in mpg, which is reasonably good for a simple linear regression.
+
+### 3) (2 points) What is the predicted mpg associated with a horsepower of 104?
+
+```{r predictmpg}
+# Predicting mpg for horsepower = 104
+predict(model, data.frame(horsepower = 104))
+```
+### 4) (2 points) Plot the response and the predictor. Use the abline() function to display the least squares regression line.
+```{r plot}
+plot(Auto$horsepower, Auto$mpg, main = "MPG vs Horsepower", xlab = "Horsepower", ylab = "MPG")
+abline(model, col = "red")
+```

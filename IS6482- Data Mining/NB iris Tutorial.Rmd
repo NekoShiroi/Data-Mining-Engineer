@@ -1,0 +1,280 @@
+---
+title: "NB iris_local Tutorial"
+author: "Matt Pecsok"
+date: "August 16, 2023"
+output: 
+  html_document:
+    number_sections: yes
+    toc: yes
+editor_options: 
+  chunk_output_type: inline
+---
+
+# Data Import and EDA 
+
+## Data description
+This is perhaps the best known database to be found in the pattern recognition literature.The data set contains 3 classes of 50 instances each, where each class refers to a type of iris_local plant.  One class is linearly separable from the other 2; the latter are NOT linearly separable from each other.
+
+iris_local images: https://www.researchgate.net/figure/220371329_fig2_Fig-5-iris_local-Setosa-Versicolor-and-Virginica-flowers-The-photos-are-from
+
+Target variable: class of iris_local plant. 
+
+Number of Instances: 150 (50 in each of three classes)
+
+Number of Attributes: 4 numeric, predictive attributes and the class variable
+
+Attribute Information:
+1. sepal length in cm
+2. sepal width in cm
+3. petal length in cm
+4. petal width in cm
+5. class: iris_local Setosa, iris_local Versicolour, iris_local Virginica
+
+## Setup and overall data inspection
+```{r Setup and overall data inspection}
+# Package loading. Install the following packages before running this chunk or knitting this program.
+
+library(e1071)
+library(psych)
+library(caret)
+library(rminer)
+library(rmarkdown)
+library(matrixStats)
+library(knitr)
+
+```
+
+
+
+## R already has an iris_local data frame. Examine the overall data frame
+```{r iris_local local}
+iris_local <- iris
+```
+
+## str and summary (base R syntax)
+```{r structure and summary}
+str(iris_local)
+summary(iris_local)
+```
+## Explanatory data exploration
+
+```{r Explanatory data exploration boxplot}
+# We can compare the model info to boxplots that group values of a numeric variable by Species 
+
+boxplot(Petal.Length~Species, data = iris_local, ylab = "Petal Length")
+boxplot(Petal.Width~Species, data = iris_local, ylab = "Petal Width")
+boxplot(Sepal.Length~Species, data = iris_local, ylab = "Speal Length")
+boxplot(Sepal.Width~Species, data = iris_local, ylab = "Speal Width")
+```
+
+
+## Separate data by Species class
+
+```{r Explanatory data exploration summary}
+df_setosa <- subset(iris_local, Species == "setosa")
+summary(df_setosa)
+df_versicolor <- subset(iris_local, Species == "versicolor")
+summary(df_versicolor)
+df_virginica <- subset(iris_local, Species == "virginica")
+summary(df_virginica)
+```
+
+## Plot predictors' correlations by class
+
+```{r Explanatory data exploration pairs panels}
+pairs.panels(df_setosa[-5])
+pairs.panels(df_versicolor[-5])
+pairs.panels(df_virginica[-5])
+```
+
+
+# NB model building using e1071 package
+
+Built on the whole dataframe. 
+
+```{r NB model building}
+# e1071 includes a naiveBayes algorithm to build a Naive Bayesian classification model
+# e1071 documentation - https://cran.r-project.org/web/packages/e1071/e1071.pdf
+
+# Run ?naiveBayes to find out more information about naiveBayes 
+
+
+iris_nb_w <- naiveBayes(Species ~ ., data = iris_local)
+
+## alternatively, the two arguments in naiveBayes are the data frame with predictors only and the target variable column
+
+iris_nb_w <- naiveBayes(iris_local[,-5], iris_local[,5])
+
+# Examine the Means and Sds of the predictors for the iris_local model
+
+iris_nb_w
+```
+
+
+
+## Generate performance metrics
+
+```{r}
+# Generate the predictions for the train set
+
+predicted_species <- predict(iris_nb_w, iris_local)
+
+mmetric(iris_local$Species, predicted_species, metric="CONF")
+
+mmetric(iris_local$Species, predicted_species, metric=c("ACC","TPR","PRECISION","F1"))
+```
+# Simple hold-out evaluation
+
+```{r Simple hold-out evaluation}
+# Use createDataPartition() in caret package to split iris_local 50%-50% into a train set and a test set
+
+# set seed to a value for createDataPartition(). With the same value and input, 
+# the partitions output will be consistent each time the following commands are executed.
+
+set.seed(100)
+inTrain <- createDataPartition(iris_local$Species, p=0.5, list=FALSE)
+
+# inTrain is a list of indices to the rows in the iris_local data frame
+
+str(inTrain)
+# inTrain
+
+# Assign the rows in iris_local indexed by inTrain to create a train set
+# Assign all other rows indexed by -inTrain to create a test set
+
+irisTrain <- iris_local[inTrain,]
+irisTest <- iris_local[-inTrain,]
+```
+
+## Examine the distributions of Species and other attriutes of train and test sets
+
+Make sure that they are consistent between train and test sets.
+```{r summary}
+summary(irisTrain)
+summary(irisTest)
+```
+## table of Species
+
+see the counts of the target in Train and Test sets
+
+```{r table}
+table(irisTrain$Species)
+table(irisTest$Species)
+```
+## prop table of Species
+
+see the proportion of the target in Train and Test sets
+
+```{r prop table}
+prop.table(table(irisTrain$Species))
+prop.table(table(irisTest$Species))
+```
+# Use the train set to build a model
+```{r nb model on train}
+iris_nb <- naiveBayes(irisTrain$Species~.,irisTrain)
+iris_nb
+```
+## Apply the model to the hold-out train set and generate holdout evaluation metrics
+
+```{r predict on train}
+predicted_species_train <- predict(iris_nb, irisTrain)
+
+mmetric(irisTrain$Species, predicted_species_train, metric="CONF")
+mmetric(irisTrain$Species, predicted_species_train, metric=c("ACC","TPR","PRECISION","F1"))
+```
+
+## Apply the model to the hold-out test set and generate holdout evaluation metrics
+
+```{r predict on test}
+predicted_species <- predict(iris_nb, irisTest)
+
+mmetric(irisTest$Species, predicted_species, metric="CONF")
+mmetric(irisTest$Species, predicted_species, metric=c("ACC","TPR","PRECISION","F1"))
+```
+## Takeaway: 
+
+The NaiveBayes Model does quite well on this dataset and performs admirably. Both Train and Test have performance metrics. We are not overfitting. 
+
+# Cross Validation
+
+## Define cv_function
+
+```{r Define cv_function}
+# create a callable cv_function with input arguments for re-use with different input arguments
+
+cv_function <- function(df, target, nFolds, seedVal, classification, metrics_list)
+{
+
+  set.seed(seedVal)
+  folds = createFolds(df[,target],nFolds)
+  # folds
+ 
+ cv_results <- lapply(folds, function(x)
+ { 
+   train <- df[-x,-target]
+   test  <- df[x,-target]
+   
+   train_target <- df[-x,target]
+   test_target <- df[x,target]
+   
+   classification_model <- classification(train,train_target) 
+   
+   pred<- predict(classification_model,test)
+   
+   return(mmetric(test_target,pred,metrics_list))
+ })
+ 
+ cv_results_m <- as.matrix(as.data.frame(cv_results))
+
+ cv_mean<- as.matrix(rowMeans(cv_results_m))
+ 
+ colnames(cv_mean) <- "Mean"
+ 
+ cv_sd <- as.matrix(rowSds(cv_results_m))
+ 
+ colnames(cv_sd) <- "Sd"
+ 
+ cv_all <- cbind(cv_results_m, cv_mean, cv_sd)
+ 
+ kable(cv_all,digits=2)
+}
+```  
+
+
+## Call the cross validation function. 3 fold. 
+
+Notice how we are passing variables for metrics_list and for classification. For target folds and seed we are passing literals.
+
+```{r cross validation 3 fold}
+
+metrics_list <- c("ACC","PRECISION","TPR","F1")
+
+# the order here is unimportant because we have passed named arguments. 
+
+cv_function(metrics_list =  metrics_list, 
+            df = iris, 
+            target = 5, 
+            nFolds = 3, 
+            seed = 1234,
+            classification =  naiveBayes)
+
+```
+## Call the cross validation function. 5 fold. 
+
+```{r cross validation 5 fold}
+
+# the order here is unimportant because we have passed named arguments. 
+
+cv_function(metrics_list =  metrics_list, 
+            df = iris, 
+            target = 5, 
+            nFolds = 5, 
+            seed = 1234,
+            classification =  naiveBayes)
+
+```
+
+## Takeaway: 
+
+With the more robust check of cross-validation we are still seeing high performance. Be aware here however, with only 150 instances total applying cross-validation with a large number of folds may be counterproductive. 
+

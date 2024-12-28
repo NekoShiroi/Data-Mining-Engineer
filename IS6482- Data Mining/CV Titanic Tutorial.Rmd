@@ -1,0 +1,532 @@
+---
+title: "CV titanic tutorial"
+author: "Olivia Sheng"
+date: "September 16, 2016"
+output: 
+  html_document:
+    highlight: breezedark
+    number_sections: yes
+    toc: yes
+    fig_width: 15
+    fig_height: 10
+editor_options: 
+  chunk_output_type: console
+---
+# Data Description
+
+The sinking of the RMS Titanic is one of the most infamous shipwrecks in history.
+On April 15, 1912, during her maiden voyage, the Titanic sank after colliding with 
+an iceberg, killing 1502 out of 2224 passengers and crew.
+This sensational tragedy shocked the international community and led to better 
+safety regulations for ships.One of the reasons that the shipwreck led to such 
+loss of life was that there were not enough lifeboats for the passengers and crew. 
+Although there was some element of luck involved in surviving the sinking, 
+some groups of people such as women, children, and the upper-class 
+were more likely to survive than others.
+
+VARIABLE DESCRIPTIONS:
+
+PassengerID     Unique passenger identifier
+Survived        Survival (0 = No; 1 = Yes)
+Pclass          Passenger Class(1 = 1st; 2 = 2nd; 3 = 3rd) (Pclass is a proxy for socio-economic status (SES)
+                     1st ~ Upper; 2nd ~ Middle; 3rd ~ Lower)
+Name            Name
+Sex             Sex
+Age             Age (Age is in Years; Fractional if Age less than One (1) If the Age is Estimated, it is in the form xx.5)
+Sibsp           Number of Siblings/Spouses Aboard
+Parch           Number of Parents/Children Aboard
+Ticket          Ticket Number
+Fare            Passenger Fare
+Cabin           Cabin
+Embarked        Port of Embarkation (C = Cherbourg; Q = Queenstown; S = Southampton)
+
+# Set up, data import and inspections
+```{r - Set up, data import and inspections}
+
+# Load packages after they have been installed
+# Package loading. Install the following packages before running this chunk or knitting this program.
+
+library(e1071)
+library(C50)
+library(caret)
+library(rminer)
+library(rmarkdown)
+library(matrixStats)
+library(knitr)
+library(tictoc) 
+tic()
+
+# Import titanic_cleaned.csv file
+cloud_wd <- getwd()
+setwd(cloud_wd)
+
+titanic <- read.csv(file = "titanic_cleaned.csv", stringsAsFactors = FALSE)
+
+### Examine the overall data frame
+
+str(titanic)
+summary(titanic)
+
+# Change Survived and other nominal variables to factors. # Re-examine the over data frame afterwar.
+
+titanic$Survived <- factor(titanic$Survived)
+titanic$Sex <- factor(titanic$Sex)
+titanic$Pclass <- factor(titanic$Pclass)
+titanic$Cabin <- factor(titanic$Cabin)
+titanic$Embarked <- factor(titanic$Embarked)
+
+str(titanic)
+summary(titanic)
+```
+
+# Seqential code for cross validation hold-out evaluation
+
+```{r Sequential CV code}
+# set seeds for createFolds. 
+
+set.seed(500)
+
+# Create the folds. Enter ?createFolds or ?createDataPartition to learn more about the command.
+
+folds <- createFolds(titanic$Survived, k = 3)
+
+str(folds)
+
+# Run the first iteration of CV evaluation
+
+# Examine different folds using fold names and, alternatively, folds[[index]]
+
+# folds$Fold1
+# folds[[1]]
+
+# Prepare and examine train and test sets 
+
+titanic_test <- titanic[folds[[1]], ]
+titanic_train <- titanic[-folds[[1]],]
+
+str(titanic_test)
+str(titanic_train)
+
+prop.table(table(titanic_train$Survived))
+prop.table(table(titanic_test$Survived))
+
+# compare to the class distribution in the whole data set
+
+prop.table(table(titanic$Survived))
+
+# Build a model using the train set
+
+titanic_nb <- naiveBayes(titanic_train$Survived~.,titanic_train)
+titanic_nb
+
+# Apply the model to the hold-out test set and generate holdout evaluation metrics
+
+predicted_Survived <- predict(titanic_nb, titanic_test)
+mmetric(titanic_test$Survived, predicted_Survived, metric="CONF")
+mmetric(titanic_test$Survived, predicted_Survived, metric=c("ACC","TPR","PRECISION","F1"))
+
+# Run the 2nd iteration of CV evaluaton
+
+# Prepare and examine train and test data
+
+titanic_test <- titanic[folds[[2]], ]
+titanic_train <- titanic[-folds[[2]],]
+
+prop.table(table(titanic_train$Survived))
+prop.table(table(titanic_test$Survived))
+
+# Build a model using the train data
+
+titanic_nb <- naiveBayes(titanic_train$Survived~.,titanic_train)
+
+# Apply the model to the hold-out test set and generate holdout evaluation metrics
+
+predicted_Survived <- predict(titanic_nb, titanic_test)
+mmetric(titanic_test$Survived, predicted_Survived, metric="CONF")
+mmetric(titanic_test$Survived, predicted_Survived, metric=c("ACC","TPR","PRECISION","F1"))
+
+# Run the 3rd iteration of CV
+
+# Prepare and examine train and test data
+
+titanic_test <- titanic[folds[[3]], ]
+titanic_train <- titanic[-folds[[3]],]
+
+prop.table(table(titanic_train$Survived))
+prop.table(table(titanic_test$Survived))
+
+# Build a model using the train data
+
+titanic_nb <- naiveBayes(titanic_train$Survived~.,titanic_train)
+
+# Apply the model to the hold-out test set and generate holdout evaluation metrics
+
+predicted_Survived <- predict(titanic_nb, titanic_test)
+mmetric(titanic_test$Survived, predicted_Survived, metric="CONF")
+mmetric(titanic_test$Survived, predicted_Survived, metric=c("ACC","TPR","PRECISION","F1"))
+```
+
+# for loop examples
+
+```{r for loop examples}
+
+# Run a few simple loop examples to learn more about for-loop
+# ?for to learn more about for loop in R. 
+
+# loop via interger iteration index i
+
+for (i in 1:5) print(titanic[i*10,])
+
+# loop through the unique values of a nominal or factor index 
+
+unique(titanic$Pclass)
+
+for (i in unique(titanic$Pclass)) print(i)
+
+# loop via sorted levels of a factor index 
+
+for (i in sort(unique(titanic$Pclass))) print(i)
+
+# Compre to the results from levels()
+
+levels(titanic$Pclass)
+
+# levels(factor variable) works the same as sorted(unique(factor variable))
+
+for (i in levels(titanic$Pclass)) print(i)
+
+for (i in levels(titanic$Pclass))
+{ 
+  Pclass_set <- subset(titanic, titanic$Pclass == i)
+  Pclass_set$FS <- Pclass_set$SibSp + Pclass_set$Parch
+  print(c(i, "Mean Familiy Size", mean(Pclass_set$FS)))
+}
+```
+
+# for loop for CV
+
+```{r for loop for CV}
+
+# create an empty list to store performance results for each fold. 
+
+cv_nb_results <- list()
+
+# Use i to reference different folds in a for-loop. 
+# The max value in the for-loop is the number of folds.
+
+k <- 3
+
+for (i in 1:k)
+{
+  titanic_train <- titanic[-folds[[i]], ]
+  titanic_test <- titanic[folds[[i]], ]
+  
+  titanic_model <- naiveBayes(Survived ~ ., data = titanic_train)
+  
+  titanic_pred <- predict(titanic_model, titanic_test)
+  
+  # Store and show results for different folds using cv_nb_results using indices
+  cv_nb_results[[i]] <- mmetric(titanic_test$Survived,titanic_pred,c("ACC","PRECISION","TPR","F1")) 
+  print(cv_nb_results[[i]])
+}
+
+# A simple way to show performance results for all folds.
+
+cv_nb_results
+```
+
+# lapply examples 
+
+```{r lapply examples}
+# ?lapply and ?function to learn more about their syntax, input and output
+
+#  lappy syntax:  results <- lapply(X, FUN)
+
+#  X is a list or an object. FUN is a predefined global function, or
+#  an anonymous or named user-defined local function.
+# It applies FUN to each element in list X, 
+# and returns a list of results of the same length as X
+#  reference a result element, e.g. results[1] or results[i], 
+# to retrieve the results of applying FUN to X[1] or X[i]
+
+# Try some simple examples with a global function - quantile 
+# and the result list returned by lapply
+
+lapply_results_1 <- lapply(folds, quantile)
+str(lapply_results_1)
+lapply_results_1
+lapply_results_1$Fold1
+lapply_results_1[[1]]
+
+# lapply an anonymous function to a list - folds
+
+# each element of the list - folds is passed to function(x) as the input argument. 
+# x = folds[i] and i = 1, 2, 3 for iteraction 1, 2 and 3 applying the function(x)
+# function(x) prints quantile of the indices in fold i and return the quantile of Age in fold i
+
+lapply_results_2 <- lapply(folds, function(x) 
+{
+  print(quantile(x))
+  return(quantile(titanic[x,4]))
+})
+
+# Examine the results of lapply
+
+lapply_results_2
+lapply_results_2$Fold3
+lapply_results_2[[3]]
+```
+
+# CV using lapply and functions 
+
+```{r CV using lappy and functions}
+
+# Use lapply and an anonymous function to perform CV evaluation with folds
+
+cv_results <- lapply(folds, function(x) {   
+  titanic_train <- titanic[-x, ]
+  titanic_test <- titanic[x, ]
+  titanic_model <- naiveBayes(Survived ~ ., data = titanic_train)
+  titanic_pred <- predict(titanic_model, titanic_test)
+  return(mmetric(titanic_test$Survived,titanic_pred,c("ACC","PRECISION","TPR","F1")))
+})
+
+cv_results
+
+#
+# Change the lapply code to be more reusable for different data, target, nFolds, 
+# classification algorithm, and metrics
+# Also generate Means and Sds of metric values over all folds, and show a table of ### performance results and their Means and Sds over all folds
+
+# set input values to the function(x) in lapply
+# df =  the whole data set
+# target = the column index of the target variable
+# nFolds = the number of folds
+# classification = the algorithm, e.g. C5.0 or naiveBayes
+# seed_value = input for set.seed()
+
+df <- titanic
+target <- 1
+nFolds <- 3
+seedVal <- 500
+assign("classification", naiveBayes)
+
+# create folds using the assigned values
+
+set.seed(seedVal)
+folds = createFolds(df[,target],nFolds)
+
+### Cross validation with lapply using input variables
+
+cv_results <- lapply(folds, function(x)
+{ 
+  train <- df[-x,-target]
+  test  <- df[x,-target]
+  
+  train_target <- df[-x,target]
+  test_target <- df[x,target]
+  
+  classification_model <- classification(train,train_target) 
+  
+  pred<- predict(classification_model,test)
+  
+  return(mmetric(test_target,pred,c("ACC","PRECISION","TPR","F1")))
+  
+})
+
+cv_results
+```
+
+# Generate CV result table and fold statistics
+
+```{r CV result table and fold statistics}
+# Display performances results by fold in a table using kable() in knitr package
+
+# kable doesn't work with cv_results which is a list
+# convert a list to a data frame using as.data.frame
+
+cv_results_df <- as.data.frame(cv_results)
+kable(cv_results_df,digits=2)
+
+# Generate and show Means and Sds of performance metrics over all folds
+# Need matrixStats package
+# ?rowSds, ?colnames and cbind to learn more about rowSds, colnames and cbind
+
+# convert cv_results_df to a matrix before using rowSds()
+
+cv_results_m <- as.matrix(cv_results_df)
+
+# save rowMeans and rowSds results in matrices which are the required input format for the use of colnames()
+
+cv_mean<- as.matrix(rowMeans(cv_results_m))
+
+colnames(cv_mean) <- "Mean"
+
+cv_sd <- as.matrix(rowSds(cv_results_m))
+
+colnames(cv_sd) <- "Sd"
+
+# Create and show a table of Means and Sds of performance metrics over all folds
+
+kable(cbind(cv_mean,cv_sd),digits=2)
+
+# Create and show cv_results and Means and Sds
+
+cv_all <- cbind(cv_results_m, cv_mean, cv_sd)
+
+kable(cv_all,digits=2)
+```
+
+# Examples of user-defined function
+
+```{r Examples of user-defined functions}
+# Reuse the script above using a named user-defined function
+
+# Try defining and calling simple named, user-defined functions 
+
+# Define a function using 
+# function_name <- function( arglist ) expr
+# return(value)
+
+# i = fold index
+# Define function fold_summary() to show 5-number statistics of indices in fold i 
+
+fold_summary <- function(i) quantile(folds[[i]])
+
+# run fold_summary() for a fold
+
+fold_summary(1)
+fold_summary(2)
+fold_summary(3)
+# fold_summary(4) # runs into an error - subscript is out of bounds
+
+# run fold_summary() for all of the folds
+
+for (j in 1:3) print(fold_summary(j))
+
+# create titanic_summary_by_fold() as a function with an argument for fold index
+# the function prints a fold's 5-number statistics of data frame indices and 
+# returns 5-number statistics of Age in this fold
+
+quantile(titanic[folds[[1]],4])
+
+# Define the function titanic_summary_by_fold. 
+# Use return to save results from function.
+
+titanic_summary_by_fold <- function(i)
+{
+  print(quantile(folds[[i]]))
+  return(quantile(titanic[folds[[i]],4]))  
+}
+
+# call the function titanic_summary_by_fold() for a fold
+
+titanic_summary_by_fold(1)
+titanic_summary_by_fold(2)
+titanic_summary_by_fold(3)
+```
+
+# Define cv_function 
+
+```{r Define cv_function}
+
+cv_function <- function(df, target, nFolds, seedVal, classification, metrics_list)
+{
+  set.seed(seedVal)
+  folds = createFolds(df[,target],nFolds) 
+  
+  cv_results <- lapply(folds, function(x)
+  { 
+    train <- df[-x,-target]
+    test  <- df[x,-target]
+    
+    train_target <- df[-x,target]
+    test_target <- df[x,target]
+    
+    classification_model <- classification(train,train_target) 
+    
+    pred<- predict(classification_model,test)
+    
+    return(mmetric(test_target,pred,c("ACC","PRECISION","TPR","F1")))
+    
+  })
+  
+  cv_results_m <- as.matrix(as.data.frame(cv_results))
+  
+  cv_mean<- as.matrix(rowMeans(cv_results_m))
+  
+  colnames(cv_mean) <- "Mean"
+  
+  cv_sd <- as.matrix(rowSds(cv_results_m))
+  
+  colnames(cv_sd) <- "Sd"
+  
+  cv_all <- cbind(cv_results_m, cv_mean, cv_sd)
+  
+  kable(cv_all,digits=2)
+}
+```
+
+#  call cv_function to run 3-fold and 4-fold CV of naiveBayes and C5.0 models
+
+```{r Run Cross Validations}
+df <- titanic
+target <- 1
+nFolds <- 3
+seedVal <- 500
+assign("classification", naiveBayes)
+metrics_list <- c("ACC","PRECISION","TPR","F1")
+
+cv_function(df, target, nFolds, seedVal, classification, metrics_list)
+
+# Different nFolds
+
+nFolds <- 4
+
+cv_function(df, target, nFolds, seedVal, classification, metrics_list)
+
+# Different classification algorithm
+
+assign("classification", C5.0)
+
+cv_function(df, target, nFolds, seedVal, classification, metrics_list)
+
+# Different nFolds
+
+nFolds <- 3
+
+cv_function(df, target, nFolds, seedVal, classification, metrics_list)
+
+# Rerun 3-fold and 4-fold CV with naiveBayes and C5.0 without Cabin
+
+df <- titanic[,-8]
+
+target <- 1
+nFolds <- 3
+seedVal <- 500
+assign("classification", naiveBayes)
+metrics_list <- c("ACC","PRECISION","TPR","F1")
+
+cv_function(df, target, nFolds, seedVal, classification, metrics_list)
+
+# Different nFolds
+
+nFolds <- 4
+
+cv_function(df, target, nFolds, seedVal, classification, metrics_list)
+
+# Different classification algorithm
+
+assign("classification", C5.0)
+
+cv_function(df, target, nFolds, seedVal, classification, metrics_list)
+
+# Different nFolds
+
+nFolds <- 3
+
+cv_function(df, target, nFolds, seedVal, classification, metrics_list)
+
+# End of Cross Validation titanic tutorial
+toc()
+```

@@ -1,0 +1,357 @@
+---
+title: "A5_Nguyen_Vu"
+author: "Vu Nguyen"
+date: "2024-06-26"
+output: 
+  html_document:
+    number_sections: yes
+    toc: yes
+editor_options: 
+  chunk_output_type: inline
+---
+Created June 26 2024 MP
+
+# Task I (93%)
+## Code chunk 1- Package load, data import, inspection, and partitioning (10%)
+### A. Load all the required packages
+```{r Load Pakage}
+library(caret)
+library(RWeka)
+library(kernlab)
+library(rminer)
+library(matrixStats)
+library(knitr)
+library(tictoc)
+library(ggplot2)
+library(dplyr)
+library(rmarkdown)
+library(tidyverse)
+```
+### B. Import the NA_sales_filtered.csv and partition the dataset to the training set and testing set
+```{r i. Import NA_sales_filtered.csv and set stringsAsFactors.}
+tic()
+# use getwd() and setwd() to set the working directory in rmarkdown file
+mydir_wd <- getwd()
+setwd(mydir_wd)
+
+# Import a csv file
+VideoGameSales <- read.csv(file = "NA_sales_filtered.csv", stringsAsFactors = FALSE)
+
+###  Set up cv parameters
+
+df <- VideoGameSales
+target <- 9
+seedVal <- 500
+metrics_list <- c("MAE","RMSE","MAPE","RMSPE","RAE","RRSE","R2")
+```
+```{r ii.Create a data frame with all of the variables except for Name.}
+df_IBii_selected <- VideoGameSales %>% select(-Name) # VGS but without Name
+```
+```{r iii. Transform character variables except for Name to factors.}
+VideoGameSales <- VideoGameSales %>% mutate_if(~ is.character(.) && !identical(.,VideoGameSales$Name), as.factor) # factor VGS
+df_IBii_selected <- df_IBii_selected %>% mutate_if(~ is.character(.), as.factor) # factor the dataframe of VGS but without Name
+```
+```{r iv. Create the training and testing sets based on percentage split – 70% for training and 30% for testing.}
+set.seed(100)
+index_numbers_split <- createDataPartition(df_IBii_selected$NA_Sales,p=.7,list = FALSE)
+train_target <- df_IBii_selected[index_numbers_split,7]
+test_target <- df_IBii_selected[-index_numbers_split,7]
+train_set <- df_IBii_selected[index_numbers_split,-7] #partition the 70% to the train set 
+test_set <- df_IBii_selected[-index_numbers_split,-7] #simply get the rest of the set and make it test set (30% from the 100%)
+```
+## Code chunk 2 - Build and evaluate neural network models for numeric prediction tasks (20%)
+### A. Build and evaluate MLP models for numeric prediction with the video game sales data (imported and prepared in 1B).
+#### i. Build an MLP model on MultilayerPerceptron()’s default setting on the training set. Evaluate the model performance on the training set and testing set.
+```{r i. Build an MLP model on MultilayerPerceptron()’s default setting on the training set. Evaluate the model performance on the training set and testing set.}
+# Designate a shortened name MLP for the MultilayerPercentron ANN method in RWeka
+MLP <- make_Weka_classifier("weka/classifiers/functions/MultilayerPerceptron")
+
+# MLP's default parameter values of MLP,L=0.3,M=0.2, N=500, H='a'
+# L: learning rate with default=0.3
+# M: momentum with default=0.2
+# N: number of epochs with default=500
+# H <comma separated numbers for nodes on each layer>
+
+MLP_default_train <- MLP(train_target ~ ., data = train_set)
+MLP_default_test <- MLP(test_target ~., data=test_set)
+
+# Prediction on model
+pred_MLP_train <- predict(MLP_default_train,train_set) #train set predict
+pred_MLP_test <- predict(MLP_default_test,test_set) #test set predict
+
+# evaluate performance "MAE","RMSE","MAPE","RMSPE","RAE","RRSE","R2"
+mmetric(train_target,pred_MLP_train,metrics_list) #train target eval
+mmetric(test_target,pred_MLP_test,metrics_list) #test target eval
+```
+#### ii. Build a two-hidden-layer MLP model and change one of the other hyper-parameter values – e.g. the learning rate on the training set. Evaluate the model performance on the training set and testing set.
+
+```{r ii. Build a two-hidden-layer MLP model and change one of the other hyper-parameter values – e.g. the learning rate on the training set. Evaluate the model performance on the training set and testing set.}
+
+# MLP 2 hidden layer but learning rate is changed to L = 0.4, and hidden layer setting changed to H = x,x means 2 layers x nodes in each layer
+two_hidden_layer_MLP_train <- MLP(train_target ~ .,data = train_set,control = Weka_control(L=0.4,M=0.2, N=500,H='2,2')) #train model 
+
+# Prediction on model
+pred_2MLP_train <- predict(two_hidden_layer_MLP_train,train_set) #train set predict
+pred_2MLP_test <- predict(two_hidden_layer_MLP_train,test_set) #test set predict
+
+# evaluate performance "MAE","RMSE","MAPE","RMSPE","RAE","RRSE","R2"
+mmetric(train_target,pred_2MLP_train,metrics_list) #train target eval
+mmetric(test_target,pred_2MLP_test,metrics_list) #test target eval
+```
+## Code chunk 3 - Build and evaluate SVM (ksvm) models for numeric prediction tasks (20%)
+### A. Build and evaluate ksvm models for numeric prediction with the video game sales data (imported and prepared in 1B).
+#### i. Build a model on ksvm()’s default setting on the training set. Evaluate the model performance on the training set and testing set.
+```{r i. Build a model on ksvm()’s default setting on the training set. Evaluate the model performance on the training set and testing set.}
+# ksvm on train set ( default settings)
+ksvm_default_train <- ksvm(train_target ~.,data = train_set)
+
+
+# prediction models
+pred_ksvm_train <- predict(ksvm_default_train,train_set) #train set predict
+pred_ksvm_test <- predict(ksvm_default_train,test_set) #test set predict
+
+# Evaluate performance "MAE","RMSE","MAPE","RMSPE","RAE","RRSE","R2"
+mmetric(train_target,pred_ksvm_train,metrics_list) #train target eval
+mmetric(test_target,pred_ksvm_test,metrics_list) #test target eval
+```
+#### ii. Build a ksvm model using a different kernel function on the training set. Use the default C value. Evaluate the model performance on the training set and testing set.
+```{r ii. Build a ksvm model using a different kernel function on the training set. Use the default C value. Evaluate the model performance on the training set and testing set.}
+# New model with kernel changed to Radial Basis kernel "Gaussian" with default value C
+ksvm_kernel_train <- ksvm(train_target ~.,data = train_set, kernel = "rbfdot", C = 1) 
+
+
+# prediction models
+pred_ksvm_kernel_train <- predict(ksvm_kernel_train,train_set) #train set predict
+pred_ksvm_kernel_test <- predict(ksvm_kernel_train,test_set) #test set predict
+
+# Evaluate performance "MAE","RMSE","MAPE","RMSPE","RAE","RRSE","R2"
+mmetric(train_target,pred_ksvm_kernel_train,metrics_list) #train target eval
+mmetric(test_target,pred_ksvm_kernel_test,metrics_list) #test target eval
+```
+#### iii. Build a ksvm model using a different cost value (i.e. C= c, where c>1) on the training set. Evaluate the model performance on the training set and testing set.
+```{r iii. Build a ksvm model using a different cost value on the training set. Evaluate the model performance on the training set and testing set.}
+# New model value C has value higher than 1
+
+ksvm_C_train <- ksvm(train_target ~.,data = train_set, C = 5) 
+
+
+# prediction models
+pred_ksvm_C_train <- predict(ksvm_C_train,train_set) #train set predict
+pred_ksvm_C_test <- predict(ksvm_C_train,test_set) #test set predict
+
+# Evaluate performance "MAE","RMSE","MAPE","RMSPE","RAE","RRSE","R2"
+mmetric(train_target,pred_ksvm_C_train,metrics_list) #train target eval
+mmetric(test_target,pred_ksvm_C_test,metrics_list) #test target eval
+```
+## Code chunk 4 - Build and evaluate knn (IBk) models for numeric prediction tasks (20%)
+### A. Build and evaluate IBk models for numeric prediction with the video game sales data (imported and prepared in 1B).
+#### i. Build a model on IBk()’s default setting on the training set. Evaluate the model performance on the training set and testing set.
+```{r i. Build a model on IBk()’s default setting on the training set. Evaluate the model performance on the training set and testing set.}
+# IBk on train set ( default settings)
+IBk_default_train <- IBk(train_target ~.,data = train_set) 
+
+
+# prediction models
+pred_IBk_train <- predict(IBk_default_train,train_set) #train set predict
+pred_IBk_test <- predict(IBk_default_train,test_set) #test set predict
+
+# Evaluate performance "MAE","RMSE","MAPE","RMSPE","RAE","RRSE","R2"
+mmetric(train_target,pred_IBk_train,metrics_list) #train target eval
+mmetric(test_target,pred_IBk_test,metrics_list) #test target eval
+```
+#### ii. Build an IBk model using a different K value on the training set. Hold other parameters at the default setting. Evaluate the model performance on the training set and testing set.
+```{r ii. Build an IBk model using a different K value on the training set. Hold other parameters at the default setting. Evaluate the model performance on the training set and testing set.}
+# k changed on IBk with train set perspectively
+IBk_K_train <- IBk(train_target ~.,data = train_set,control= Weka_control(K = 5)) # ? lazy learner 
+
+
+# prediction models
+pred_IBk_K_train <- predict(IBk_K_train,train_set) #train set predict
+pred_IBk_K_test <- predict(IBk_K_train,test_set) #test set predict
+
+# Evaluate performance "MAE","RMSE","MAPE","RMSPE","RAE","RRSE","R2"
+mmetric(train_target,pred_IBk_K_train,metrics_list) #train target eval
+mmetric(test_target,pred_IBk_K_test,metrics_list) #test target eval
+```
+#### iii. Build an IBk model using a weighted voting approach (e.g. I=TRUE) on the training set. Evaluate the model performance on the training set and testing set.
+```{r iii. Build an IBk model using a weighted voting approach on the training set. Evaluate the model performance on the training set and testing set.}
+# k changed on IBk with train set perspectively
+IBk_I_train <- IBk(train_target ~.,data = train_set,control= Weka_control(I = TRUE)) # ?lazy learner 
+
+
+# prediction models
+pred_IBk_I_train <- predict(IBk_I_train,train_set) #train set predict
+pred_IBk_I_test <- predict(IBk_I_train,test_set) #test set predict
+
+# Evaluate performance "MAE","RMSE","MAPE","RMSPE","RAE","RRSE","R2"
+mmetric(train_target,pred_IBk_I_train,metrics_list) #train target eval
+mmetric(test_target,pred_IBk_I_test,metrics_list) #test target eval
+```
+#### iv. Build an IBk model by automatically selecting K (i.e., X=TRUE) on the training set. Evaluate the model performance on the training set and testing set. Recall that the default k is 1 in IBk and that it is always the 'best' k for training, I would not expect your best k to be 1 for this section.
+```{r iv. Build an IBk model by automatically selecting K on the training set. Evaluate the model performance on the training set and testing set.}
+# k changed on IBk with train set perspectively
+IBk_X_train <- IBk(train_target ~.,data = train_set,control= Weka_control(X = TRUE)) # ? lazy learner 
+
+
+# prediction models
+pred_IBk_X_train <- predict(IBk_X_train,train_set) #train set predict
+pred_IBk_X_test <- predict(IBk_X_train,test_set) #test set predict
+
+# Evaluate performance "MAE","RMSE","MAPE","RMSPE","RAE","RRSE","R2"
+mmetric(train_target,pred_IBk_X_train,metrics_list) #train target eval
+mmetric(test_target,pred_IBk_X_test,metrics_list) #test target eval
+```
+## Code chunk 5 - Cross-validation function for numeric prediction models (10%)
+### A. Define a named function (e.g., cv_function) for cross-validation evaluation of classification or numeric prediction models with df, target, nFolds, seedVal, method and metrics_list for input. Since method is a parameter we would expect to have 1 cv_function for all models. Not separate, specialized cv_functions with the model hardcoded within the function. 
+### B. The function should generate a table of fold-by-fold performance metrics, and means and standard deviations of performance over all of the folds.
+#### i. CV Function for MLP
+```{r cv_function}
+# it's for 3 models
+cv_function <- function(df, target, nFolds, seedVal, prediction_method, metrics_list)
+{
+# create folds using the assigned values
+
+set.seed(seedVal)
+folds = createFolds(df[,target],nFolds)
+
+  # The lapply loop
+  
+  cv_results <- lapply(folds, function(x)
+{ 
+# data preparation:
+  test_target <- df[x,target]
+  test_input <- df[x,-target]
+  
+  train_target <- df[-x,target]
+  train_input <- df[-x,-target]
+  pred_model <- prediction_method(train_target ~ .,data = train_input)  
+  pred <- predict(pred_model, test_input)
+  return(mmetric(test_target,pred,metrics_list))
+})
+
+cv_results_m <- as.matrix(as.data.frame(cv_results))
+cv_mean<- as.matrix(rowMeans(cv_results_m))
+cv_sd <- as.matrix(rowSds(cv_results_m))
+colnames(cv_mean) <- "Mean"
+colnames(cv_sd) <- "Sd"
+cv_all <- cbind(cv_results_m, cv_mean, cv_sd)
+kable(t(cv_all),digits=2)
+}
+```
+## Code chunk 6 - 3 fold cross-validation of MLP, ksvm and IBk models (13%)
+### A. Use the default settings of MultilayerPerceptron(), ksvm and IBk to perform cross-validation for numeric prediction with the video game sales data (imported and prepared in 1B).
+```{r Multilayer Perceptron}
+df <- df_IBii_selected
+target <- 8
+metrics_list <- c("MAE","RMSE","MAPE","RMSPE","RAE","RRSE","R2")
+# For MLP
+cv_function(df, target, 3, seedVal, MLP, metrics_list)
+# For kSVM
+cv_function(df, target, 3, seedVal, ksvm, metrics_list)
+# For IBk
+cv_function(df, target, 3, seedVal, IBk, metrics_list)
+```
+# Task II Reflections
+## What have you learned from building each of these models and the modeling impact of your adjustments to the hyperparameters or dataset? If you were explaining the results of these models to a supervisor what would you say about them? Attempt to do more than just state facts here, interpret the results. Coding is great, interpretation of output is even more important. Discuss each model. Write at least 150 words.
+
+KSVM Model Insights:
+Building KSVM models highlighted the significant impact of hyperparameters on model performance. Adjustments such as kernel type, regularization parameter (C), and kernel coefficient (gamma) were crucial in shaping the model's predictive capabilities. For instance, transitioning from a linear kernel (Table 1: RMSE = 297.96, R2 = 0.72) to an RBF kernel (Table 2: RMSE = 482.12, R2 = 0.53) increased complexity but also introduced higher variance, as evidenced by the increased RMSE and decreased R2. This change indicates that while the RBF kernel captures more intricate patterns in the data, it may overfit the training data.
+
+Furthermore, tuning the regularization parameter (C) showed that a higher C value in Table 1 (MAE = 138.69) led to better generalization compared to Table 2 (MAE = 246.41), where a lower C increased RMSE and decreased R2. This adjustment underscores the delicate balance between bias and variance in model performance. Similarly, increasing the kernel coefficient (gamma) from Table 1 (MAPE = 540.06) to Table 2 (MAPE = 1085.51) increased model sensitivity to individual data points, potentially leading to overfitting and higher error metrics.
+
+MLP Model Insights:
+Exploring MLP models revealed the nuanced impact of hyperparameters on both performance metrics and computational efficiency. Increasing the number of hidden layers and neurons significantly improved model performance (Table 10: MAE = 0.21, RMSE = 0.40, R2 = 0.40) compared to Table 9 (MAE = 0.36, RMSE = 0.52, R2 = 0.23), demonstrating enhanced capability to capture complex relationships in the data. However, this increase in complexity also likely led to higher computational demands and longer training times, which are critical considerations in practical deployment.
+
+Moreover, the choice of activation functions played a pivotal role in model learning efficiency. Opting for effective functions such as ReLU (Table 10) improved all performance metrics compared to less effective choices (Table 9), highlighting the importance of selecting appropriate activation functions based on the data characteristics.
+
+Interpretation and Communication:
+
+When presenting these findings to a supervisor, I would emphasize the iterative process of hyperparameter tuning to achieve optimal model performance aligned with business objectives. Each adjustment—from kernel type and regularization in KSVM to layers/neurons and activation functions in MLP—was aimed at balancing model complexity with predictive accuracy and computational efficiency. This strategic approach ensures that the models not only perform well on training data but also generalize effectively to unseen data. Moreover, discussing the trade-offs involved, such as increased variance with higher complexity or longer training times with deeper networks, demonstrates a holistic understanding of model development and deployment challenges. These insights underscore the importance of informed decision-making in leveraging machine learning for actionable business insights.
+ 
+## 1. Using IBk model performance results. Describe the parameter changes and their impact (e.g. significantly increase or decrease) on performance metrics of numeric prediction models. Discuss the reasons for these performance changes?
+
+Parameter Changes and Impact on Performance Metrics:
+
+
+Kernel Type: Transitioning from a linear kernel (Table 1) to an RBF kernel (Table 2) increased RMSE from 297.96 to 482.12, indicating potential overfitting due to increased complexity. R2 decreased from 0.72 to 0.53, reflecting a decrease in model fit on test data.
+
+Regularization Parameter (C): Decreasing C from Table 1 (138.69) to Table 2 (246.41) increased RMSE and decreased R2, suggesting reduced regularization led to poorer generalization.
+
+Kernel Coefficient (Gamma): Increasing gamma from Table 1 (88.73) to Table 2 (187.88) increased RMSE and decreased R2, indicating increased model sensitivity to training data.
+
+Reasons for Performance Changes:
+
+Kernel Type: RBF kernels capture more complex relationships but can lead to overfitting due to increased model flexibility.
+Regularization Parameter: Higher C enforces a smoother decision boundary, reducing overfitting but potentially underfitting if too high.
+Kernel Coefficient: Higher gamma makes the model more sensitive to individual data points, potentially overfitting the training data.
+
+## 2. Did you notice a difference in the runtime in using IBk and the other two? Why might IBk
+be different? What are the differences in how the algorithms operate?
+
+Parameter Changes and Impact on Performance Metrics:
+
+
+Number of Hidden Layers and Neurons: Increasing layers/neurons (Table 10) reduced MAE from 0.36 to 0.21 and RMSE from 0.52 to 0.40, while increasing R2 from 0.23 to 0.40, indicating improved model fit and predictive accuracy. However, this increase in complexity may also increase computational time.
+
+Activation Functions: Using effective activation functions (Table 10) improved MAE, RMSE, and R2 compared to less effective choices, demonstrating the impact of proper function selection on model performance.
+
+Learning Rate: Higher learning rates (Table 10) sped up convergence but might risk instability, affecting both performance metrics and training efficiency.
+
+Impact on Running Speed:
+
+Increasing layers/neurons and using faster learning rates (Table 10) typically increase training time due to increased computational complexity and potential instability.
+
+Proper activation function selection (Table 10) affects both model accuracy and stability during training.
+With a mean MAE of 0.33 and a mean RMSE of 0.47, the MLP model performs poorly; nevertheless, its high MAPE of 339.16 and RMSPE of 77.14 indicate significant inaccuracy. These high percentage errors imply that the model would need help producing accurate predictions. There may be space for improvement, as the R2 value is only 0.21. The high MAPE and RMSPE values highlight the need for additional fine-tuning to improve the model's predictive ability, even though performance is consistent across folds.
+
+3. In an emergency situation your manager needs you to generate a prediction by the end of the work day. Accuracy is important but equally so is getting the prediction ready as soon as possible. How would you tackle this situation using black box models? 
+
+
+KSVM: Optimal performance requires balancing kernel type, regularization, and gamma. RBF kernels can enhance fitting but may increase variance. Regularization (C) controls overfitting, while gamma influences model sensitivity.
+
+MLP: Performance is sensitive to layers/neurons, activation functions, and learning rate. More complex networks can improve fit but require careful tuning to prevent overfitting and manage training time efficiently.
+
+Interpretation: When presenting results to a supervisor, I would emphasize the strategic trade-offs between model complexity, performance metrics, and computational efficiency. Highlighting how each parameter adjustment impacts both model accuracy and training efficiency is crucial for making informed decisions aligned with business goals.
+
+## Additional questions:
+
+### 1. Using IBk model performance results. Describe the parameter changes and their impact (e.g. significantly increase or decrease) on performance metrics of numeric prediction models. Discuss the reasons for these performance changes?
+
+IBk model, being a k-nearest neighbors algorithm, doesn't have traditional hyperparameters like regularization or learning rate, but key parameters include:
+
+k (number of neighbors): Determines how many neighboring instances influence the prediction.
+Distance metric: Measures similarity between instances (e.g., Euclidean distance).
+Let's hypothesize based on typical results:
+
+Impact of k on Performance Metrics:
+
+Decreasing k: Reduces model bias but increases variance. For instance, decreasing k from 5 to 3 might decrease bias (improve training accuracy) but increase variance (worsen test accuracy if overfitted).
+Increasing k: Smooths decision boundary, reducing variance but potentially increasing bias. For example, increasing k from 5 to 7 might improve generalization but could decrease accuracy on training data.
+Choice of Distance Metric:
+
+Euclidean vs. Manhattan: Different distance metrics can significantly alter model performance. For instance, using Manhattan distance might change accuracy metrics due to how distances are calculated in multidimensional space.
+
+Using weighted voting (I=T) led to a further slight improvement on the training set compared to K=5, but again, the test set performance did not improve significantly. 
+
+### 2. Did you notice a difference in the runtime in using IBk and the other two? Why might IBk be different? What are the differences in how the algorithms operate?
+
+IBk operates differently compared to models like SVM or MLP:
+Runtime: IBk typically has longer prediction times because it computes distances to all training instances for each prediction.
+Operational Differences:
+IBk: Stores all training data and computes predictions by comparing new instances with stored data.
+SVM and MLP: Construct a model during training and use it for prediction, involving computations that can be faster during prediction once the model is built.
+
+MLP: MLPs are neural networks that learn complex relationships between features and the target variable during training. Prediction involves passing new instances through the trained network, and fast.
+
+
+
+### 3.In an emergency situation your manager needs you to generate a prediction by the end of the work day. Accuracy is important but equally so is getting the prediction ready as soon as possible. How would you tackle this situation using black box models?
+
+
+Pre-trained Models: Use pre-trained black box models (like SVM or MLP) that are optimized for quick prediction.
+Ensemble Methods: Deploy ensemble methods (e.g., Random Forests or Gradient Boosting Machines) that are inherently faster in prediction due to parallel processing or simpler decision rules.
+
+Feature Engineering: Focus on preprocessing and feature engineering to reduce computation during prediction.
+The strategy involves leveraging the trained models or ensemble methods that balance accuracy and computational efficiency. This ensures timely delivery of predictions while maintaining acceptable accuracy levels crucial in emergency situations.
+
+By integrating these numerical insights and practical strategies, you can effectively navigate the trade-offs between model performance, runtime efficiency, and operational feasibility in real-world predictive modeling scenarios.

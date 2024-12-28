@@ -1,0 +1,386 @@
+---
+title: "C5.0 titanic tutorial"
+author: "Matt Pecsok"
+date: "7/13/2023"
+output: 
+  html_document:
+    number_sections: yes
+    toc: yes
+editor_options: 
+  chunk_output_type: inline
+---
+# Import data, factorize, explore
+
+## Import Libraries
+
+```{r library import }
+library(C50)
+library(caret)
+library(rminer)
+library(rmarkdown)
+library(tidyverse) 
+```
+
+## Import Data 
+```{r import data}
+
+tic()
+
+# Import titanic_cleaned.csv file
+# setwd("/cloud/project")
+cloud_wd <- getwd()
+setwd(cloud_wd)
+
+titanic <- read.csv(file = "titanic_cleaned.csv", stringsAsFactors = FALSE)
+```
+
+## Examine structure
+```{r structure}
+
+#titanic %>% ## structure function here. It's str()
+
+```
+## Examine summary
+```{r summary}
+#titanic %>% ## summary function here. It's summary()
+```
+## Factorize the categorical variables
+
+Notice one categorical variable is not being transformed with the mutate statement. Add Cabin into the statement to ensure all categorical columns are transformed into factor variables. 
+
+```{r factor vars}
+
+
+# Change Survived and other nominal variables to factors. # Re-examine the over data frame after.
+
+
+# base R version of factoring
+#titanic$Survived <- factor(titanic$Survived)
+#titanic$Sex <- factor(titanic$Sex)
+#titanic$Pclass <- factor(titanic$Pclass)
+#titanic$Cabin <- factor(titanic$Cabin)
+#titanic$Embarked <- factor(titanic$Embarked)
+
+#tidyverse factoring
+
+# Transform character variables with categorical values into factor variables
+
+titanic <- titanic %>%
+  mutate(across(c(Survived, Sex, Pclass, Embarked), factor))
+
+
+```
+## Structure and Summary after Factorization
+```{r - structure}
+str(titanic)
+```
+
+```{r - structure and summary}
+summary(titanic)
+```
+
+# Split our dataset into Train and Test sets.
+
+Use createDataPartition for the iris set to create a Train and a Test set. 
+
+```{r createDataPartition}
+set.seed(100)
+
+# you enter the proportion for the split here. I'd suggest .8
+#inTrain <- createDataPartition(titanic$Survived, p=####, list=FALSE)
+
+# use the row indexes from line 87 to create the 2 sets.
+# train includes the index, test excludes the index.
+
+#train_set <- titanic[XXXX,]
+#test_set <- titanic[-XXXX,]
+```
+
+```{r examine target distribution in original dataframe, Train dataframe and Test Dataframe}
+
+# change XXXX to be Survived (the target variable.)
+titanic %>% pull(XXXX) %>% table() %>% prop.table() %>% round(2)
+train_set %>% pull(XXXXX) %>% table() %>% prop.table() %>% round(2)
+test_set %>% pull(XXXX) %>% table() %>% prop.table() %>% round(2)
+
+
+# below ask yourself, is the target variable proportion the same across all three sets?
+```
+Nice! createDataPartition was able to perfectly respect our target distribution when creating Train and Test.
+
+# Build decision trees using C5.0 in C50 package
+
+### Tuning the CF hyperparameter
+
+Let's experiment with the CF hyperparameter which controls the size of the Tree. We'll also disable some other hyperparameters to ensure our CF changes have the maximum impact
+
+## Build 6 tree models with varying CF values
+
+```{r build Model 1}
+
+# here we create multiple (6) models only varying the CF hyperparameter. We go from the Max of 1 to the Min of 0 and check the tree complexity after
+
+# you do here. for 
+#tree 1 user a CF = 1
+#tree 2 user a CF = .6
+#tree 3 user a CF = .3
+#tree 4 user a CF = .1
+#tree 5 user a CF = .05
+#tree 6 user a CF = .0
+
+# replace the XXXX with the values above
+tree_cf_1 <- C5.0(Survived~.,train_set,control = C5.0Control(CF=XXXX,earlyStopping = FALSE,noGlobalPruning = TRUE))
+tree_cf_2 <- C5.0(Survived~.,train_set,control = C5.0Control(CF=XXXX,earlyStopping = FALSE,noGlobalPruning = TRUE))
+tree_cf_3 <- C5.0(Survived~.,train_set,control = C5.0Control(CF=XXXX,earlyStopping = FALSE,noGlobalPruning = TRUE))
+tree_cf_4 <- C5.0(Survived~.,train_set,control = C5.0Control(CF=XXXX,earlyStopping = FALSE,noGlobalPruning = TRUE))
+tree_cf_5 <- C5.0(Survived~.,train_set,control = C5.0Control(CF=XXXX,earlyStopping = FALSE,noGlobalPruning = TRUE))
+tree_cf_6 <- C5.0(Survived~.,train_set,control = C5.0Control(CF=XXXX,earlyStopping = FALSE,noGlobalPruning = TRUE))
+
+```
+
+## How many leaf nodes does each tree have?
+
+```{r how many leaf nodes do we have?}
+
+#tree_cf_1$size
+# you do the same for the rest of the trees
+
+# numerically compare the complexity of the trees.
+```
+
+## Plot the simplest and most complex trees.
+
+```{r visualize the least and most complex trees,fig.height=8}
+ 
+# change fig.height if needed to display nicely on your machine. 
+
+plot(tree_cf_1)
+
+# plot tree 6 here.
+#plot(XXXX)
+
+
+# visually compare the complexity of the trees
+```
+
+```{r get tree complexity}
+leaf_nodes_vector <- c(tree_cf_1$size,
+                            tree_cf_2$size,
+                            tree_cf_3$size,
+                            tree_cf_4$size,
+                            tree_cf_5$size,
+                            tree_cf_6$size)
+
+
+
+# here enter (in sequence) the CF values you used for the 6 trees
+# relace the 999s to do so. 
+cf_vector <- c(999,999,999,999,999,999)
+
+cf_size_df <- data.frame(CF = cf_vector,
+           tree_size = leaf_nodes_vector
+           )
+
+cf_size_df
+# so our tree starts off with 25 leaf nodes when CF = 1, then has only 2 leaf nodes when CF = 0. The lower the CF the less complex the tree. 
+```
+```{r now plot the complexity of the tree with the CF we used}
+
+cf_size_df %>% 
+  ggplot() + 
+  geom_point(aes(x = CF, y = tree_size)) +
+  ylab("Tree Size (# of leaf nodes)") +
+  ggtitle("Tree Complexity by Confidence Factor")
+
+cf_size_df %>% 
+  ggplot() + 
+  geom_line(aes(x = CF, y = tree_size)) +
+  ylab("Tree Size (# of leaf nodes)") +
+  ggtitle("Tree Complexity by Confidence Factor")
+```
+# Model results 
+
+Here we predict with each model so we can see accuracy results.
+
+
+
+## predicting in train and test.
+
+Now we ask the the question: How does performance change as we manipulate the CF hyperparameter which then impacts the tree complexity?
+```{r generate predictions for train and test}
+
+tree_cf_1_train_predictions <- predict(tree_cf_1,train_set)
+tree_cf_2_train_predictions <- predict(tree_cf_2,train_set)
+tree_cf_3_train_predictions <- predict(tree_cf_3,train_set)
+tree_cf_4_train_predictions <- predict(tree_cf_4,train_set)
+tree_cf_5_train_predictions <- predict(tree_cf_5,train_set)
+tree_cf_6_train_predictions <- predict(tree_cf_6,train_set)
+
+tree_cf_1_test_predictions <- predict(tree_cf_1,test_set)
+tree_cf_2_test_predictions <- predict(tree_cf_2,test_set)
+tree_cf_3_test_predictions <- predict(tree_cf_3,test_set)
+tree_cf_4_test_predictions <- predict(tree_cf_4,test_set)
+tree_cf_5_test_predictions <- predict(tree_cf_5,test_set)
+tree_cf_6_test_predictions <- predict(tree_cf_6,test_set)
+
+tree_cf_6_test_predictions[0:4] # what do the predictions look like?
+
+# 1 = Survived
+# 0 = Did not Survive.
+
+# We see the model predicted Survived, Did not Survive, Survived, Survived for the first four passengers in our Test set. 
+```
+## Accuracy for Train set
+
+
+```{r train set performance of all models}
+
+# replace metric='XXX' with metric="ACC"
+mmetric(train_set$Survived, tree_cf_1_train_predictions, metric="XXX")
+mmetric(train_set$Survived, tree_cf_2_train_predictions, metric="XXX")
+mmetric(train_set$Survived, tree_cf_3_train_predictions, metric="XXX")
+mmetric(train_set$Survived, tree_cf_4_train_predictions, metric="XXX")
+mmetric(train_set$Survived, tree_cf_5_train_predictions, metric="XXX")
+mmetric(train_set$Survived, tree_cf_6_train_predictions, metric="XXX")
+
+
+```
+Which model performed best in the Train set? 
+It appears that the first two models both with 25 leaf nodes respectively performed the best. But we need to check the Test set to ensure the models are not overfitted to the Train set. 
+
+
+## Accuracy for Test set
+
+```{r test set performance of all models}
+mmetric(test_set$Survived, tree_cf_1_test_predictions, metric="XXX")
+mmetric(test_set$Survived, tree_cf_2_test_predictions, metric="XXX")
+mmetric(test_set$Survived, tree_cf_3_test_predictions, metric="XXX")
+mmetric(test_set$Survived, tree_cf_4_test_predictions, metric="XXX")
+mmetric(test_set$Survived, tree_cf_5_test_predictions, metric="XXX")
+mmetric(test_set$Survived, tree_cf_6_test_predictions, metric="XXX")
+
+
+```
+Which model performed best in the Test set? 
+It appears that model 4 with 83% accuracy did. This model had 12 leaf nodes rather than 25. 25 leaf nodes performed best in Train. So, a less complex tree outperformed the more complex tree on our holdout set! This is good news. In general we should favor less complex models so long as they outperform the more complex models. 
+
+
+## create a dataframe with model results
+
+```{r let's summarize this is a graph}
+
+# first we need to collect all of the model results predicting for both train and test.
+
+# create vectors for all the train accuracy results. will be just a vector of numbers. 
+
+# again here replace XXX with ACC
+train_acc <- c(
+  mmetric(train_set$Survived, tree_cf_1_train_predictions, metric="XXX"),
+  mmetric(train_set$Survived, tree_cf_2_train_predictions, metric="XXX"),
+  mmetric(train_set$Survived, tree_cf_3_train_predictions, metric="XXX"),
+  mmetric(train_set$Survived, tree_cf_4_train_predictions, metric="XXX"),
+  mmetric(train_set$Survived, tree_cf_5_train_predictions, metric="XXX"),
+  mmetric(train_set$Survived, tree_cf_6_train_predictions, metric="XXX"))
+
+# create vectors for all the train accuracy results. will be just a vector of numbers. 
+test_acc <- c(
+  mmetric(test_set$Survived, tree_cf_1_test_predictions, metric = "XXX"),
+  mmetric(test_set$Survived, tree_cf_2_test_predictions, metric = "XXX"),
+  mmetric(test_set$Survived, tree_cf_3_test_predictions, metric = "XXX"),
+  mmetric(test_set$Survived, tree_cf_4_test_predictions, metric = "XXX"),
+  mmetric(test_set$Survived, tree_cf_5_test_predictions, metric = "XXX"),
+  mmetric(test_set$Survived, tree_cf_6_test_predictions, metric = "XXX")
+)
+
+acc_df_cf <- data.frame(train_acc,test_acc,cf_vector,leaf_nodes_vector)
+acc_df_cf 
+```
+This view of the data is easier to read and interpret. We have built a dataframe to store the results for train and test for all our models as well as the cf and tree complexity
+
+
+
+```{r show the dropoff from train to test for each model}
+
+# create a new column that is the difference in accuracy between train and test
+
+acc_df_cf$acc_drop <- acc_df_cf$train_acc - ###acc_df_cf$test_acc
+acc_df_cf
+
+```
+Underfitting occurs when more accuracy (or other metrics) could be improved by either adding more data or complexity to the model. We can see below that for tree sizes of 
+
+```{r plot the results of accuracy}
+
+
+# This graph is quite complex, no need to change anything here. Just run as is.
+
+ggplot() + 
+  geom_line(aes(x=acc_df_cf$leaf_nodes_vector,y=acc_df_cf$train_acc,color='Train Accuracy')) +
+  geom_line(aes(x=acc_df_cf$leaf_nodes_vector,y=acc_df_cf$test_acc,color='Test Accuracy')) +
+  scale_color_manual(values = c("Train Accuracy" = "red", "Test Accuracy" = "blue")) +
+  ggtitle("Titanic Tree Accuracy in Test and Train by number of leaf nodes.") + 
+  xlab('Tree Complexity (Leaf Nodes)') +
+  ylab('Accuracy') +
+  ylim(75,100) +
+  geom_point(aes(x=7,y=82.8)) +
+  geom_point(aes(x=12,y=83.15)) +
+  geom_vline(xintercept = 7) +
+  geom_text(aes(x=4,y=93),label='<- Underfitted') +
+  geom_text(aes(x=12,y=93),label='Increasingly Overfitted ->')
+
+
+
+
+  
+
+```
+
+## Graph Interpretation:
+
+As can be seen in the graph above increasing the complexity of the Tree can improve accuracy up to a point in both Train and Test sets, but at some point the model becomes overfitted and learns rules that do not generalize to the Testing set. So, accuracy continues to climb in Train, but actually becomes worse in Test at around 12 leaf nodes and continues to decline as the number of leaf nodes increase. 
+
+The two points on the graph show the first and second best accuracy in the Test set. At 7 nodes we have no difference between Train and Test accuracy so no overfitting. However with an increase to 12 leaf nodes we get a slight bump in accuracy, but we also have some overfitting. A reasonable question might be: Is 83.16% accuracy much better than 82.8% accuracy? It's a difference of only .36%. 
+
+
+## Feature Importance by Model:
+
+Let us evaluate for a few models which features/predictors the model found to be useful. In this case we are interested in knowing which features each model chose. We can see that all predictors were used in the overfitted tree (8), only 5 features were used in the best Test model. And in our extemely underfitted tree we only used a single feature (Sex).
+
+It's clear that Sex is probably our best feature to determine who survived Titanic. 
+
+Cabin:
+One very interesting point to make is the Cabin column. Notice in the overfitted model with 25 leaf nodes how Cabin was the 4th most important feature. Yet, in the best Test model Cabin wasn't used at all! Probably the cabin column is quite responsible for overfitting as each passenger had their own cabin. This categorical column that is unique to almost each passenger is unlikely to generalize well to unseen data but the model can learn in Train that it is extremely useful to predict in Train!
+
+This is exactly why we use Train and Test to see which features Generalize to new data the model has not seen before. 
+
+
+```{r extract feature importances}
+C5imp(tree_cf_1)
+C5imp(tree_cf_4)
+C5imp(tree_cf_6)
+```
+## More metrics
+
+Below we demonstrate how to generate multiple metrics to evaluate the quality of the model's predictions. Accuracy is useful, as are Recall (TPR), Precision, F1 score. 
+
+```{r generate more evaluation metrics}
+
+
+# build a metrics vector with the words
+# ACC
+# F1
+# PRECISION
+# TPR
+
+# as per usual replace XXX with the values shown above.
+evaluation_metrics_vector <- c("XXX","XXX","XXX","XXX")
+
+# Train Metrics
+mmetric(train_set$Survived, tree_cf_1_train_predictions, metric=evaluation_metrics_vector)
+
+# Test Metrics
+mmetric(test_set$Survived, tree_cf_6_test_predictions, metric=evaluation_metrics_vector)
+
+
+
+```

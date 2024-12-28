@@ -1,0 +1,405 @@
+---
+title: "A3_Nguyen_Vu"
+author: "Vu Nguyen"
+date: "2024-06-0505"
+output: 
+  html_document:
+    number_sections: yes
+    toc: yes
+editor_options: 
+  chunk_output_type: inline
+---
+Created June 05 2024 MP
+
+# Task I (87%)
+## Part 1 (10 points) Code Chunk 1 - Set up, Data import, and Preparation
+### A. Package loading, and data import 
+#### Package Loading
+
+```{r Setup and overall data inspection}
+# Package loading. Install the following packages before running this chunk or knitting this program.
+library(C50)
+library(knitr)
+library(matrixStats)
+library(e1071)
+library(caret)
+library(rminer)
+library(tictoc)
+library(ggplot2)
+library(dplyr)
+library(rmarkdown)
+
+```
+#### Data import
+```{r Set up, data import and inspection }
+
+tic()
+# use getwd() and setwd() to set the working directory in rmarkdown file
+mydir_wd <- getwd()
+setwd(mydir_wd)
+
+# Import a csv file
+institution <- read.csv(file = "CD_additional_modified.csv", stringsAsFactors = FALSE)
+
+```
+#### Summary, Structure before Factor
+```{r structure and summary}
+# examine data before data factorization
+
+str(institution)
+summary(institution)
+```
+#### Data Factor
+```{r Factors}
+institution$y <- factor(institution$y) # variable y factorization
+institution$job <- factor(institution$job) # variable job factorization
+institution$education <- factor(institution$education) # variable education factorization
+institution$poutcome <- factor(institution$poutcome) # variable poutcome factorization
+institution$marital <- factor(institution$marital) # variable marital factorization
+institution$default <- factor(institution$default) # variable default factorization
+institution$housing <- factor(institution$housing) # variable housing factorization
+institution$loan <- factor(institution$loan) # variable loan factorization
+institution$contact <- factor(institution$contact) # variable contact factorization
+institution$month <- factor(institution$month) #variable month factorization
+institution$day_of_week <- factor(institution$day_of_week) #variable day of week factorization
+```
+#### Summary, Structure after factor
+```{r OSAS}
+institution %>% str() # show the overall "structure" of data
+
+institution %>% summary() # SUMMARY FUNCTION HERE
+
+```
+### B. Partition this data frame for simple hold-out evaluation – 70% for training and the other 30% for testing.
+
+```{r DataPartition}
+set.seed(100)
+index_numbers_split <- createDataPartition(institution$y,p=.7,list = FALSE)
+train_set <- institution[index_numbers_split,] #partition the 70% to the train set 
+summary(train_set)
+test_set <- institution[-index_numbers_split,] #simply get the rest of the set and make it test set (30% from the 100%)
+summary(test_set)
+```
+### C. Show the distributions (in percentages) of the target variable in the whole input data frame, the train set and the test set.
+```{r Distribution}
+#?data.frame
+prop.table(table(institution$y)) %>% round(2)*100 # Show the distribution of y in data frame
+prop.table(table(train_set$y)) %>% round(2)*100 # Show the distribution of y in train set
+prop.table(table(test_set$y)) %>% round(2)*100 # Show the distribution of y in test set
+
+```
+
+## 2.(20 points) Code Chunk 2 - Simple Decision Tree Training and Testing
+### A. (10 points) Train a C5.0 model using the default setting. Show information about this model and the summary of the model. Do not plot the tree at this point because the tree might be too complex. Generate and compare this model’s confusion matrices and classification evaluation metrics in testing and training sets 
+#### Set up the tree
+```{r C5.0}
+#?C5.0 #?C5.0Control
+
+# here we create models only varying the default
+#?C5.0.default
+c50_model_default <- C5.0(y ~., train_set)
+
+#summary
+summary(c50_model_default)
+#size
+c50_model_default$size
+```
+#### Generate Predictions
+```{r generate predictions for train and test}
+#?mmetric
+
+# Predict for Train set
+tree_cf_train_predictions <- predict(c50_model_default,train_set)
+# Predict for Test set
+tree_cf_test_predictions <- predict(c50_model_default,test_set)
+
+```
+#### Confusion Matrix
+```{r confusion matrix}
+
+# Confusion matrix Train models
+  mmetric(train_set$y, tree_cf_train_predictions, metric="CONF")
+
+# Confusion matrix Test models
+  mmetric(test_set$y, tree_cf_test_predictions, metric="CONF")
+
+
+```
+
+#### Accuracy, Precision, F1, TPR 
+```{r Accuracy, Precision, F1, TPR }
+# Accuracy, Precision, F1, TPR  for Train
+#?mmetric
+  mmetric(train_set$y, tree_cf_train_predictions, metric=c("ACC","Precision","F1","TPR"))
+
+# Accuracy, Precision, F1, TPR  for Test
+
+  mmetric(test_set$y, tree_cf_test_predictions, metric=c("ACC","Precision","F1","TPR"))
+
+```
+
+### B. (10 points) Explore reducing the tree complexity by lowering CF levels. In the code, select a CF level of your choice to train and test another C5.0 model. Plot the tree. Generate and compare this model’s confusion matrices and classification evaluation metrics in testing and training sets
+#### Regenerate the CF value
+```{r C5.0 after CF changed}
+#?C5.0 #?C5.0Control
+
+# here we create models only varying the default CF (0.25)
+
+c50_model_changed <- C5.0(y ~., train_set, control = C5.0Control(CF=0.001), earlyStopping = FALSE, noGlobalPruning =FALSE)
+
+#summary
+summary(c50_model_changed)
+#size
+c50_model_changed$size
+
+```
+
+#### Plot the tree
+```{r plot after CF changed}
+plot(c50_model_changed, fig.height=8, fig.width=20)
+```
+#### Generate Predictions
+```{r generate predictions for train and test after CF changed}
+#?mmetric
+
+# Predict for Train set
+tree_cf_train_predictions <- predict(c50_model_changed,train_set)
+
+# Predict for Test set
+tree_cf_test_predictions <- predict(c50_model_changed,test_set)
+
+
+```
+#### Confusion Matrix
+```{r confusion matrix after CF changed}
+
+# Confusion matrix Train models
+  mmetric(train_set$y, tree_cf_train_predictions, metric="CONF")
+
+# Confusion matrix Test models
+  mmetric(test_set$y, tree_cf_test_predictions, metric="CONF")
+
+```
+
+#### Accuracy, Precision, F1, True Positive Rate
+```{r Accuracy, Precision, F1, True Positive Rate after CF changed}
+# Accuracy, Precision, F1, True Positive Rate for Train
+  mmetric(train_set$y, tree_cf_train_predictions, metric=c("ACC","Precision","F1","TPR"))
+
+# Accuracy, Precision, F1, True Positive Rate for Test
+  mmetric(test_set$y, tree_cf_test_predictions, metric=c("ACC","Precision","F1","TPR"))
+```
+
+## 3.(30 points) Code Chunk 3 - Simple Naïve Bayes Model Training and Testing
+### A. (15 points) Train a naive Bayes model using the training set from 1. Show information about this model. Generate and compare this model’s confusion matrices and classification evaluation metrics in testing and training sets 
+#### Model1 = w1 NB model all columns; building using e1071 package
+
+```{r NB model building}
+# e1071 includes a naiveBayes algorithm to build a Naive Bayesian classification model
+# e1071 documentation - https://cran.r-project.org/web/packages/e1071/e1071.pdf
+
+# Run ?naiveBayes to find out more information about naiveBayes 
+
+institution_w1_nb <- naiveBayes(y ~., data= train_set)
+
+institution_w1_nb # show model
+
+```
+
+#### Generate Predictions
+```{r generate predictions for train and test with NB institution}
+#?mmetric
+
+# Predict for Train set with NB institution
+nb1_train_predictions <- predict(institution_w1_nb,train_set)
+
+# Predict for Test set with NB institution
+nb1_test_predictions <- predict(institution_w1_nb,test_set)
+
+
+```
+#### Generate Data Frame that compare Confusion matrix and classification evaluation with training and test matrix
+```{r dataframe of confusion matrix and classification evaluation for NB}
+nb1_train_cf <- mmetric(train_set$y, nb1_train_predictions, metric="CONF") # confusion matrix for training
+nb1_train_cf # show confusion matrix
+nb1_train_evaluation <- mmetric(train_set$y, nb1_train_predictions, metric=c("ACC","F1","PRECISION","TPR")) # evaluation for training
+nb1_test_cf <- mmetric(test_set$y, nb1_test_predictions, metric="CONF") # confusion matrix for testing
+nb1_test_cf #show confusion matrix
+nb1_test_evaluation <- mmetric(test_set$y, nb1_test_predictions, metric=c("ACC","F1","PRECISION","TPR")) # evaluation for testing
+train_test_nb1_evaluation <- data.frame(nb1_train_evaluation, nb1_test_evaluation)# dataframe of those aspect
+train_test_nb1_evaluation
+```
+
+### B. (15 points) Explore removing one predictor for building naive Bayes models for this requirement so as to exam the impact of the removal of a predictor. In the code, decide on which predictor to be removed from the data sets for training and testing another naive Bayes model that could improve the true positive rate of the “yes” class of the target variable y. Train and apply this new model.  Generate and compare this model’s confusion matrices and classification evaluation metrics in testing and training sets 
+#### Model2 = w1 model without previous column
+```{r remove previous}
+# An alternative naiveBayes call to build the same model.
+# The 1st argument in naiveBayes() specifies the predictors to be used.
+# The 2nd argument indicates the target variable.
+# Let's remove previous
+#?naiveBayes
+institution_w2_nb <- naiveBayes(y ~ age + job + marital + education + default + housing + loan + contact + month + day_of_week + duration + campaign + pdays + poutcome + emp.var.rate + cons.price.idx + cons.conf.idx + euribor3m + nr.employed, data=train_set)
+institution_w2_nb
+```
+
+#### Generate Predictions
+```{r generate predictions for train and test with NB institution and without class marital}
+#?mmetric
+
+# Predict for Train set with NB institution
+nb2_train_predictions <- predict(institution_w2_nb,train_set)
+
+# Predict for Test set with NB institution
+nb2_test_predictions <- predict(institution_w2_nb,test_set)
+
+
+```
+#### Generate Data Frame that compare Confusion matrix and classification evaluation with training and test matrix
+```{r dataframe of confusion matrix and classification evaluation for NB and without class marital}
+nb2_train_cf <- mmetric(train_set$y, nb2_train_predictions, metric="CONF") # confusion matrix for training
+nb2_train_cf # show confusion matrix
+nb2_train_evaluation <- mmetric(train_set$y, nb2_train_predictions, metric=c("ACC","F1","PRECISION","TPR")) # evaluation for training
+nb2_test_cf <- mmetric(test_set$y, nb2_test_predictions, metric="CONF") # confusion matrix for testing
+nb2_test_cf #show confusion matrix
+nb2_test_evaluation <- mmetric(test_set$y, nb2_test_predictions, metric=c("ACC","F1","PRECISION","TPR")) # evaluation for testing
+train_test_nb2_evaluation <- data.frame(nb2_train_evaluation, nb2_test_evaluation)# dataframe of those aspect
+train_test_nb2_evaluation
+```
+- After removing previous column, the percentage for accuracy slightly increase 1%, which from 61% (rounded) to 65% (rounded) in training, and for test set the figure change from 55% (rounded) to 60% (rounded).
+
+## 4. (10 points) Code Chunk 4 - Create a Named Cross-validation Function – cv_function ( you can reuse the cv_function in week 3's tutorial, e.g., CV Titanic Tutorial.Rmd Download CV Titanic Tutorial.Rmd)
+ A. This function uses several arguments – a data frame, the target variable, classification algorithm, seed value, the number of folds, and a set of classification metrics (without including confusion matrix output).
+ B. It generates and displays the overall accuracy, and precision, true positive rate and f-measure of each class of the target variable of the model built for each fold.
+ C. The function should also generate the mean values and standard deviations of each performance metric over all of the folds.
+ D. Use kable() to show the performance metrics by fold and their mean values and standard deviations.
+```{r Define cv_function}
+# create a callable cv_function with input arguments for re-use with different input arguments
+
+cv_function <- function(df, target, nFolds, seedVal, classification, metrics_list)
+{
+  set.seed(seedVal)
+  folds = createFolds(df[,target],nFolds) 
+  
+  cv_results <- lapply(folds, function(x)
+  { 
+    train <- df[-x,-target]
+    test  <- df[x,-target]
+    
+    train_target <- df[-x,target]
+    test_target <- df[x,target]
+    
+    classification_model <- classification(train,train_target) 
+    
+    pred<- predict(classification_model,test)
+    
+    return(mmetric(test_target,pred,c("ACC","PRECISION","TPR","F1")))
+    
+  })
+  
+  cv_results_m <- as.matrix(as.data.frame(cv_results))
+  
+  cv_mean<- as.matrix(rowMeans(cv_results_m))
+  
+  colnames(cv_mean) <- "Mean"
+  
+  cv_sd <- as.matrix(rowSds(cv_results_m))
+  
+  colnames(cv_sd) <- "Sd"
+  
+  cv_all <- cbind(cv_results_m, cv_mean, cv_sd)
+  
+  kable(cv_all,digits=2)
+}
+```
+
+## 5. (20 points) Code Chunk 5 - 5-fold and 10-fold C5.0 and naive Bayes evaluation performance with cv_function ( you can use the cv_function from the tutorial code)
+A. Use the data frame that keeps the entire set of input data to evaluate C5.0 and naive Bayes models by 5-fold as well as 10-fold cross-validation evaluations.
+### C5.0 5-folds
+```{r C5.0 5-fold}
+df <- institution
+target <- 21
+nFolds <- 5
+seedVal <- 500
+assign("classification", C5.0)
+metrics_list <- c("ACC","PRECISION","TPR","F1")
+cv_function(df, target, nFolds, seedVal, classification, metrics_list)
+```
+### NaiveBayes 5-fold
+```{r NaiveBayes 5-fold}
+df <- institution
+target <- 21
+nFolds <- 5
+seedVal <- 500
+assign("classification", naiveBayes)
+metrics_list <- c("ACC","PRECISION","TPR","F1")
+cv_function(df, target, nFolds, seedVal, classification, metrics_list)
+```
+#### C5.0 10-folds
+```{r C5.0 10-fold}
+df <- institution
+target <- 21
+nFolds <- 10
+seedVal <- 500
+assign("classification", C5.0)
+metrics_list <- c("ACC","PRECISION","TPR","F1")
+cv_function(df, target, nFolds, seedVal, classification, metrics_list)
+```
+#### naiveBayes 10-folds
+```{r naiveBayes 5-fold}
+df <- institution
+target <- 21
+nFolds <- 10
+seedVal <- 500
+assign("classification", naiveBayes)
+metrics_list <- c("ACC","PRECISION","TPR","F1")
+cv_function(df, target, nFolds, seedVal, classification, metrics_list)
+```
+
+
+# Task II: Reflections (5%)
+## What have you learned from building each of these models and the modeling impact of your adjustments to the hyperparameters or dataset? If you were explaining the results of these models to a supervisor what would you say about them? Attempt to do more than just state facts here, interpret the results. Coding is great, interpretation of output is even more important. Discuss each model. Write at least 150 words.
+
+### Baseline Model
+
+The baseline Naive Bayes model was trained using all available variables in the institution data set. Evaluating the model on both the training and testing sets showed that it performed reasonably well, with acceptable accuracy, precision, f1, true positive rate. The true positive rate (TPR) for the "yes" class was moderate, indicating that the model was fairly effective at identifying positive instances. This model serves as a benchmark for understanding how well the Naive Bayes algorithm can perform with all features included.
+
+### Reduced Model
+
+The reduced model excluded "previous" to investigate its impact on model performance. Interestingly, the performance metrics of the reduced model on both the training and testing sets showed that true positive rate (short for TPR) for the "yes" class were comparable to, and in some cases, which is TPR2 the true positive rate has a gap up to 4% compare to the old model(the baseline model). This suggests that "previous" might not have been contributing significant information to the model, and its removal helped streamline the model without sacrificing performance.
+
+### Insights and Interpretation
+
+1. Feature Importance and Redundancy: The comparable performance of the reduced model highlights that "previous" may be redundant or not particularly informative for predicting the target variable "y". This insight is valuable as it simplifies the model, reducing complexity without losing predictive power, and may lead to better generalizability.
+
+2. Model Efficiency: Removing less informative features can enhance model efficiency. With fewer predictors, the reduced model is less computationally intensive, which is advantageous for scaling and real-time applications.
+
+3. True Positive Rate (TPR): A critical metric for many classification tasks is the TPR for the "yes" class. The fact that the TPR1 did not significantly drop (less than 1% in both training and testing set ), and even improved at a 4% rate in TPR2 training set(61% to 65% -all rounded ); 5% rate in TPR2 testing set(55% to 60% -all rounded) upon removing "previous" indicates that the model's ability to correctly identify positive instances remains robust.
+
+4. By averaging the results across multiple folds, cross-validation provides a more stable and robust estimate of model performance. It mitigates the impact of any one train/test split that might be particularly favorable or unfavorable. Typically, cross-validation offers a balance between bias and variance. It uses multiple splits to ensure that all data points are used for both training and testing, reducing the likelihood of overfitting or underfitting. Makes more efficient use of the available data. Every observation is used for both training and validation, which is particularly beneficial when dealing with small datasets.
+
+### Communication to a Supervisor
+
+If I were explaining these results to a supervisor, I would say:
+
+"After comparing the metrics from the train/test split and cross-validation, it's evident that cross-validation provides a more robust and reliable estimate of model performance. While the train/test split can give us a quick snapshot, it's dependent on how the data is divided, which might not always be representative of the overall dataset. Cross-validation, on the other hand, averages the performance across multiple splits, reducing the impact of outliers or anomalies in a single split. This method is particularly valuable for ensuring that our model generalizes well to unseen data, making it a preferable choice, especially when dealing with small datasets or when seeking a more dependable assessment of our model's performance."
+
+By focusing on these key points, the supervisor would understand not just the technical results but also the practical implications and benefits of the adjustments made during the modeling process.
+
+## Additional questions:
+
+### 1. Consider the model that had worse performance, do you think that model would have a scenario where it would be preferred? What might that look like?
+
+- Based on the results, if we assume the baseline model (including all predictors) performed slightly worse than the reduced model (excluding 
+"previous"), it is important to analyze if there might be scenarios where the baseline model would be preferred despite its relatively worse performance.
+
+### 2. When you removed a predictor, what happened? Was the result what you expected? How did you decide which predictor to remove?
+
+- After removing previous column, the percentage for accuracy slightly increase 1%, which from 61% (rounded) to 65% (rounded) in training, and for test set the figure change from 55% (rounded) to 60% (rounded).
+
+- I evaluating the number for each predictors for both testing and training set. I saw that previous generate the most effective rates compare to other variable. The change rate for previous, as I mentioned earlier, was up to 5% between baseline model and reduced model. 
+
+### 3. Compare the metrics generated by the CV function and your train/test split. Were they different? Do you think one testing method is better than the other? Why?
+
+- Cross-Validation: By averaging the results across multiple folds, cross-validation provides a more stable and robust estimate of model performance. It mitigates the impact of any one train/test split that might be particularly favorable or unfavorable. Typically, cross-validation offers a balance between bias and variance. It uses multiple splits to ensure that all data points are used for both training and testing, reducing the likelihood of overfitting or underfitting. Makes more efficient use of the available data. Every observation is used for both training and validation, which is particularly beneficial when dealing with small datasets.
+
+- Train/Test Split: The results are dependent on the specific split of the data, which might not be representative of the overall dataset.This method can be more prone to variance, as the model's performance may vary significantly depending on how the data is split. It might not adequately capture the model's ability to generalize if the test set is not representative.Only part of the data is used for training and another part for testing, which might not be optimal, especially for small datasets.

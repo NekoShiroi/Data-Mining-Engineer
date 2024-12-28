@@ -1,0 +1,358 @@
+---
+title: "C5.0 iris_local Tutorial"
+author: "Matt Pecsok"
+date: "7/11/2023"
+output:
+  html_document:
+    number_sections: yes
+    toc: yes
+editor_options: 
+  chunk_output_type: inline
+---
+
+
+# Setup and overall data inspection
+
+```{r Setup and overall data inspection}
+# Package loading. Install the following packages before running this chunk or knitting this program.
+
+library(C50)
+library(caret)
+library(rminer)
+library(rmarkdown)
+library(tictoc) 
+library(tidyverse)
+
+```
+
+```{r make local dataframe}
+
+iris_local <- iris
+#notice we now have a dataframe in our Environment tab
+```
+
+# R already has an iris_local data frame. Examine the overall data frame
+
+```{r structure and summary}
+str(iris_local)
+summary(iris_local)
+```
+
+# Learn more about our Target variable
+
+```{r target exploration is factor?}
+class(iris_local$Species) # it's already a factor variable. no need to convert it. 
+```
+
+```{r table of target}
+iris_local %>% pull(Species) %>% table() # what are the counts of the target classes and how many are there?
+
+# it looks like 3 classes with 50 entries each. 
+```
+
+```{r prop table of target}
+iris_local %>% pull(Species) %>% table() %>% prop.table() %>% round(2)
+```
+
+```{r head of dataframe}
+
+iris_local %>% head()
+
+```
+
+# Build a decision tree using C5.0 in C50 package
+
+```{r Build a decision tree}
+
+# ?C5.0 learn about the formula syntax for training the model
+# this line builds the model. Possibly your first model ever? How exciting!!!
+
+whole_dataset_model1 <- C5.0(formula = Species ~ .,data = iris_local) # . means build with all predictors, not including the target variable. 
+
+```
+
+```{r class of whole_dataset_model1}
+whole_dataset_model1 %>% class() # class of type C5.0. It's an Object. 
+
+whole_dataset_model1
+# notice this object is now in our Enviroment tab
+```
+
+## Plot our model
+
+```{r plot the model}
+
+plot(whole_dataset_model1)
+
+```
+
+## Show model information
+
+Putting the model object on its own line will tell us a bit about it. Tree Size is the number of leaf nodes and quantifies the complexity of the tree. More leaf nodes = more complexity.
+
+```{r how many leaves?}
+whole_dataset_model1 # There are 4 leaf nodes. There are 3 nodes in addition which are internal nodes (not leaf nodes)
+
+# that's 7 total nodes. 4 leaf nodes. 
+
+# test your understanding here. What would the model predict for a sample with a Petal.Length of .8?
+```
+
+## Generate some made up example rows and predict.
+
+We will generate 3 made up samples.
+
+Per the visualization above it looks like if we have a row/observation with Petal.Length \<= 1.9 the model should predict setosa. Let's test that theory.
+
+Here we make some data up to see how the model works. We'll build a dataframe with whatever values we choose. We'll attempt to build observations so as to force the model to predict what we want. This should help us understand how the model works.
+
+### Made up Sample "c"
+
+```{r let's build a dataset that should be predicted as virginica}
+
+c_test_row <- data.frame(c(0),c(0),c(2.0),c(1.8)) # make petal length <= 1.9. All other values can be 0 according to the tree as it ignores them.
+colnames(c_test_row) <- c("Sepal.Length","Sepal.Width","Petal.Length","Petal.Width") # make sure the column names match
+c_test_row
+```
+
+```{r now predict on c sample}
+c_prediction <- predict(whole_dataset_model1,c_test_row)
+class(c_prediction)
+c_prediction
+
+```
+
+### Made up Sample "a"
+
+```{r let's build a dataset that should be predicted as setosa}
+
+a_test_row <- data.frame(c(0),c(0),c(1.8),c(0)) # make petal length <= 1.9. All other values can be 0 according to the tree as it ignores them.
+colnames(a_test_row) <- c("Sepal.Length","Sepal.Width","Petal.Length","Petal.Width") # make sure the column names match
+a_test_row
+```
+
+```{r now predict on a sample}
+a_prediction <- predict(whole_dataset_model1,a_test_row)
+a_prediction
+
+```
+
+Great! It predicted setosa based on just the Petal.Length like it said it would. Let's make some other predictions.
+
+### Made up Sample "b"
+
+```{r let's build a dataset that should be predicted as versicolor}
+
+b_test_row <- data.frame(c(0),c(0),c(4.0),c(1.5)) # make petal length <= 1.9. All other values can be 0 according to the tree as it ignores them.
+colnames(b_test_row) <- c("Sepal.Length","Sepal.Width","Petal.Length","Petal.Width") # make sure the column names match
+b_test_row
+```
+
+```{r now predict on b sample}
+b_prediction <- predict(whole_dataset_model1,b_test_row)
+b_prediction
+
+```
+
+### Create a single dataframe combining a,b,c
+
+Next we'll simply combine all the examples into a single dataframe and demonstrate how the prediction will look in this scenario.
+
+```{r predict for a whole dataframe}
+three_row_df <- rbind(c_test_row,a_test_row,b_test_row) # r bind does a ROW bind (hence the r)
+three_row_df
+```
+
+```{r predict on the sample dataframe}
+three_prediction <- predict(whole_dataset_model1,three_row_df)
+three_prediction
+```
+
+### we can then take the predictions and put them into the dataframe to make it easier to see what was predicted.
+
+```{r put predictions into sample dataframe as a new column}
+three_row_df$prediction <- three_prediction
+three_row_df
+```
+
+Notice that the model is COMPLETELY IGNORING Sepal.Length and Sepal.Width. It's predicting solely on Petal.Length/Petal.Width
+
+### model summary
+
+```{r model summary}
+whole_dataset_model1 %>% summary()
+```
+
+## Predict on the ENTIRE dataframe
+
+```{r evaluate our model on the whole dataset}
+
+whole_dataset_model1_predictions <- predict(whole_dataset_model1,iris_local)
+
+# how many rows did we have in our input dataset?
+iris_local %>% nrow()
+
+# how many rows did we have in the predictions?
+whole_dataset_model1_predictions %>% length()
+
+# this should make intuitive sense. we asked the model to predict for 150 rows of data and we received 150 predictions. 
+```
+
+### put all 150 predictions into a new dataframe with our dataset.
+
+```{r put predictions into new dataframe for inspection}
+
+iris_local_w_predictions <- iris_local
+iris_local_w_predictions$Predicted <- whole_dataset_model1_predictions
+
+iris_local_w_predictions %>% head()
+
+```
+
+### Filter to show the mistakes only
+
+```{r model mistakes on whole dataset}
+iris_local_w_predictions %>% filter(Species != Predicted)
+
+# we use the filter function in tidyverse syntax to find rows in which the True Species doesn't match the Predicted Species
+
+# based on the size of the filtered dataframe how many mistakes do we see?
+
+# can you see why the model made these mistakes?
+```
+
+### remind ourselves of the tree structure
+
+```{r plot the model}
+plot(whole_dataset_model1)
+```
+
+### Why did we make mistakes?
+
+Investigating the plot below, can you see why Setosa was perfect and why the model had trouble distinguishing between versicolor and virginica?
+
+### ggplot of dataset
+
+```{r a quick reminder of the scatterplot by species}
+
+iris_local %>% 
+  ggplot() + 
+  geom_point(aes(x=Petal.Width,y=Petal.Length,color=Species))
+# we can probably forgive the model for making a few mistakes around Petal.Length of ~ 1.7
+```
+
+### ggplot of mistakes
+
+```{r focusing on mistakes}
+
+iris_local_w_predictions %>% 
+  mutate(Mistake = (Predicted != Species)) %>% # create a boolean columns to tell us which predictions had mistakes (True) or not (False)
+  ggplot() + 
+  geom_point(aes(x=Petal.Width,y=Petal.Length,color=Mistake))
+# we can probably forgive the model for making a few mistakes around Petal.Length of ~ 1.7
+```
+
+The reality here is that flowers of Versicolor and Virginica may very well have overlapping sizes in the real world! When Petal Length is \~ 4.9 and Petal Width is around 1.7 it's tough to tell the difference solely based on these features. Even an expert would need more information to make an accurate identification.
+
+When our models make mistakes it may be because the data we have is insufficient to tell us what we need to know. More data may be needed.
+
+# Does our model Generalize?
+
+In order to detect if our model is going to perform well in the real world we need to "hold out" data for testing purposes. Just like a student would be tested on questions that are similar, but not identical to those they have seen in class before we need a "Test" set.
+
+This process is covered in more detail in the Data Partitioning videos and Tutorial. Make sure to review those first so this section makes sense.
+
+So, we need to "Split" the dataset into Training data, and into Testing data. This model will be Trained on only the Training subset, and will be evaluated on both Train and Test subsets.
+
+### Create Train/Test sets
+
+Use createDataPartition for the iris set to create a Train and a Test set.
+
+```{r}
+set.seed(100)
+inTrain <- createDataPartition(iris_local$Species, p=0.6, list=FALSE)
+
+length(inTrain)
+class(inTrain)
+```
+
+is 90 60% of 150? It is! So when we ask create datapartition to put 60% of the indexes in our new variable it did so.
+
+```{r now split the dataset using the indexes}
+
+train_set <- iris_local[inTrain,]
+test_set <- iris_local[-inTrain,]
+
+train_set %>% nrow()
+test_set %>% nrow()
+
+```
+
+This should make sense. We asked the createDataPartion to give us index numbers that would represent 60% of the data ideally while preserving the target variable distribution of .33,.33,.33. Our 2 new sets are 90 and 60 rows respectively. 90/150 is .6 and 60/150 is .4 which is what we should expect.
+
+Let's check to see if each set is correctly balanced by the target variable.
+
+```{r partition the dataframe using the index numbers}
+train_set %>% pull(Species) %>% table() %>% prop.table()
+test_set %>% pull(Species) %>% table() %>% prop.table() 
+```
+
+Great! We now have 2 sets each respecting the proportion of the Species we saw in the whole dataframe.
+
+Now we will rename these sets. A dataset intended to be used for model training is known as the "train" set, and one that will be used to "test" for generalizability of the model will be called the test set. The Test set is NEVER used for building the model.
+
+remember the training set is akin to an instructor giving the student the answers, the test set is intended to be like a final test and checks to see if the student learned, or potentially only memorized the answers.
+
+## Build a new model
+
+```{r use Train set to build new model}
+
+# here we Train a model with only the Train set. Remember the Test set is used exclusively for Testing, never Training. 
+
+trained_model2 <- C5.0(formula = Species ~ .,data = train_set) # <- notice we only passed in the Train set. 
+trained_model2
+```
+
+Now we ask 2 questions.
+
+1)  How did the model perform on the Train dataset?
+2)  How did the model perform on the Test dataset?
+3)  Is there a substantial difference in the performance between the two sets?
+
+## Train set evaluation (aka in-sample eval)
+
+```{r predict for Train set}
+train_predictions <- predict(trained_model2,train_set)
+train_predictions[35:45]
+```
+
+```{r predict for Test set}
+test_predictions <- predict(trained_model2,test_set)
+test_predictions[15:25]
+```
+
+```{r model confusion matrices  for Train}
+
+mmetric(train_set$Species, train_predictions, metric="CONF")
+```
+
+```{r model confusion matrices  for Test}
+
+mmetric(test_set$Species, test_predictions, metric="CONF")
+```
+
+## Generate Accuracy Metric for Train
+
+```{r metrics for Train}
+mmetric(train_set$Species, train_predictions, metric="ACC")
+```
+
+## Generate Accuracy Metric for Test
+
+```{r Accuracy for Test}
+mmetric(test_set$Species, test_predictions, metric="ACC")
+```
+
+We can see that on Training set our model did quite well. But, we see a substantial dropoff in performance on the Test set. We have \~ 7% dropoff in performance from Train to Test. This tells us our model is likely overfitted on the train set. It learned some rules that do not generalize well to new data it has not seen before.
+
+Our model only made 4 mistakes overall out of 60 attempts. Quite good performance.

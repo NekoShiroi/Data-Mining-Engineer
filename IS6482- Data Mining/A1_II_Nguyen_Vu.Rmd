@@ -1,0 +1,370 @@
+---
+title: "Titanic data exploration markdown"
+author: "Vu Nguyen"
+date: "May 22, 2024"
+output: 
+  html_document:
+    number_sections: yes
+    toc: yes
+editor_options: 
+  chunk_output_type: inline
+---
+
+Created May 22,2024 MP
+
+# Data Description
+
+The data was collected from the direct marketing campaigns conducted for a Portuguese banking institution. The marketing    campaigns were based on phone calls, possibly more than per client.  The classification goal is to predict if the client
+will subscribe a certified term deposit (variable y).
+
+  This dataset is publicly available for research. The details are described in [Moro et al., 2014].  Please include this 
+  citation if you plan to use this database:   [Moro et al., 2014] S. Moro, P. Cortez and P. Rita. A Data-Driven Approach   
+  to   Predict the Success of Bank Telemarketing. Decision Support Systems, In press, 
+  http://dx.doi.org/10.1016/j.dss.2014.03.001
+
+  *Euribor      Euribor is short for Euro Interbank Offered Rate. The Euribor rates are based on the interest rates at which
+                a panel of European banks borrow funds from one another. In the calculation, the highest and lowest 15% of 
+                all the quotes collected are eliminated. The remaining rates will be averaged and rounded to three decimal 
+                places. Euribor is determined and published at about 11:00 am each day, Central European Time.
+
+  **Duration    This attribute highly affects the output target (e.g., if duration=0 then y="no"). Yet, the duration is not 
+                known before a call is performed. Also, after the end of the call y is obviously known. Thus, this input 
+                should only be included for benchmark purposes and should be discarded if the intention is to have a 
+                realistic predictive model.
+  
+  VARIABLE DESCRIPTIONS:
+
+  Age             age (numeric)
+  Job             type of job (categorical: 
+                    "admin.","unknown","unemployed","management","housemaid","entrepreneur","student","blue-collar","self-em                       ployed","retired","technician","services")
+  Marital         arital status (categorical: "divorced","married","single","unknown"; note: "divorced" means divorced or                         widowed)
+  Education       categorical:"basic.4y","basic.6y","basic.9y","high.school","illiterate","professional.course","university.                       degree","unknown"
+  Default         has credit in default? (binary: "yes","no")
+  Housing         has housing loan? (binary: "yes","no")
+  Loan            has personal loan? (binary: "yes","no")
+  Contact         contact communication type (categorical: "unknown","telephone","cellular")
+  Month           last contact month of year (categorical: "jan", "feb", ..., "nov", "dec")
+  Day_of_week     last contact day of a week (categorical:"mon","tue","wed","thu","fri")
+  Duration**      last contact duration, in seconds (numeric)
+  Campaign        number of contacts performed during this campaign and for this client (numeric, includes last contact)
+  Pdays           number of days that passed by after the client was last contacted from a previous campaign (numeric, 999  
+                    means client was not previously contacted). Although, 999 may seem arbitrary, some one who was contacted
+                      a long time back could be a proxy for some one who hasn't been contacted. Hence,  treating pdays as 
+                        numeric is a better option than treating it as a factor variable which can be ordered but 
+                          computations with factor variables are not feasible.
+  Previous        number of contacts performed before this campaign and for this client (numeric)
+  Poutcome        outcome of the previous marketing campaign (categorical: "nonexistent","failure","success")
+  Emp.var.rate    employment variation rate - quarterly indicator (numeric)
+  Cons.price.idx  consumer price index - monthly indicator (numeric
+  Cons.conf.idx   consumer confidence index - monthly indicator (numeric)
+  Euribor3m *     euribor 3 month rate - daily indicator (numeric)
+  Nr.employed     number of employees - quarterly indicator (numeric)
+  Y               has the client subscribed a certified term deposit (CD)? (binary: "yes","no")
+ 
+ ---------------------------------------------------------------------------
+# install packages
+```{r }
+
+install.packages(c("psych", "scatterplot3d", "caret", "Rmarkdown"))
+
+```
+# Libraries
+
+```{r library}
+library(tidyverse)
+library(psych)
+library(RWeka)
+library(rmarkdown)
+library(scatterplot3d)
+library(caret) 
+```
+ 
+# Task II code chunks 1
+
+## A
+
+The goal is to use getwd() and setwd() to set the working directory in rmarkdown file and import a csv file
+```{r Set up, data import and inspection }
+
+
+# use getwd() and setwd() to set the working directory in rmarkdown file
+mydir_wd <- getwd()
+setwd(mydir_wd)
+
+# Import a csv file
+institution <- read.csv(file = "CD_additional_balanced.csv", stringsAsFactors = FALSE)
+
+```
+
+## B
+### Factors
+```{r Factors}
+institution$y <- factor(institution$y) # variable y factorization
+institution$job <- factor(institution$job) # variable job factorization
+institution$education <- factor(institution$education) # variable education factorization
+institution$poutcome <- factor(institution$poutcome) # variable poutcome factorization
+institution$marital <- factor(institution$marital) # variable marital factorization
+institution$default <- factor(institution$default) # variable default factorization
+institution$housing <- factor(institution$housing) # variable housing factorization
+institution$loan <- factor(institution$loan) # variable loan factorization
+institution$contact <- factor(institution$contact) # variable contact factorization
+institution$month <- factor(institution$month) #variable month factorization
+institution$day_of_week <- factor(institution$day_of_week) #variable day of week factorization
+```
+
+### Structure
+
+The goal is to use str() shows the number of observations, and the number, names, types and some values of columns
+```{r structure aka str}
+
+# show the overall "structure" of data
+
+ institution %>% str() 
+
+```
+
+### Summary() 
+
+Shows the mean and the five-number statistics indicating the spread of each column's values
+The goal is to show the summary
+```{r summary}
+
+  institution %>% summary() # SUMMARY FUNCTION HERE
+
+```
+
+# Task II code chunks 2
+## Age 
+```{r histogram, boxplot, and deciles of variables for age}
+# A histogram
+institution %>% ggplot() +
+  geom_histogram(aes(x=age),binwidth = 20) +
+  ggtitle("Histogram of Age")
+
+# B boxplot
+institution %>% 
+  ggplot() +
+  geom_boxplot(aes(x=age)) +
+  ggtitle('Boxplot of Age')
+
+# C deciles of variables
+quantile(institution$age, seq(from = 0, to = 1, by = 0.20))
+```
+
+## Duration 
+```{r histogram, boxplot, and deciles of variables for duration}
+# A histogram
+institution %>% ggplot() +
+  geom_histogram(aes(x=duration),binwidth = 20) +
+  ggtitle("Histogram of Duration")
+
+# B boxplot
+institution %>% 
+  ggplot() +
+  geom_boxplot(aes(x=duration)) +
+  ggtitle('Boxplot of Duration')
+
+# C deciles of variables
+quantile(institution$duration, seq(from = 0, to = 1, by = 0.20))
+```
+
+## Campaign 
+```{r histogram, boxplot, and deciles of variables for campaign}
+# A histogram
+institution %>% ggplot() +
+  geom_histogram(aes(x=campaign),binwidth = 20) +
+  ggtitle("Histogram of Campaign ")
+
+# B boxplot
+institution %>% 
+  ggplot() +
+  geom_boxplot(aes(x=campaign)) +
+  ggtitle('Boxplot of Campaign')
+
+# C deciles of variables
+quantile(institution$campaign, seq(from = 0, to = 1, by = 0.20))
+```
+
+## Pdays 
+```{r histogram, boxplot, and deciles of variables for pdays}
+# A histogram
+institution %>% ggplot() +
+  geom_histogram(aes(x=pdays),binwidth = 20) +
+  ggtitle("Histogram of Pdays")
+
+# B boxplot
+institution %>% 
+  ggplot() +
+  geom_boxplot(aes(x=pdays)) +
+  ggtitle('Boxplot of Pdays')
+
+# C deciles of variables
+quantile(institution$pdays, seq(from = 0, to = 1, by = 0.20))
+```
+
+# Task II code chunks 3
+## A
+### Count the value for y, job, education, poutcome
+```{r count value}
+# count y
+institution %>% pull(y) %>% nlevels()
+
+# count job
+institution %>% pull(job) %>% nlevels()
+
+# count education
+institution %>% pull(education) %>% nlevels()
+
+# count poutcome
+institution %>% pull(poutcome) %>% nlevels()
+
+```
+### Calculate percentage value for y, job, education, poutcome
+```{r percentage value}
+# percentage for y
+prop.table(table(institution$y))*100
+
+# percentage for job
+prop.table(table(institution$job))*100
+
+# percentage for Education
+prop.table(table(institution$education))*100
+
+# percentage for Poutcome
+prop.table(table(institution$poutcome))*100
+```
+## B
+Bar plot 
+```{r Barplot for y , job, education, poutcome}
+# For variable y
+institution %>% ggplot() +
+  geom_bar(aes(x=y)) +
+  ggtitle("Barplot of Y")
+
+# For variable job
+institution %>% ggplot() +
+  geom_bar(aes(x=job)) +
+  ggtitle("Barplot of Job")
+
+# For variable education
+institution %>% ggplot() +
+  geom_bar(aes(x=education)) +
+  ggtitle("Barplot of Education")
+
+# For the variable poutcome
+institution %>% ggplot() +
+  geom_bar(aes(x=poutcome)) +
+  ggtitle("Barplot of Poutcome")
+```
+
+# Task II Code Chunks 4
+## A
+Use cor and pairs.panels to display correlations for these seven numeric variables – age, duration, campaign, pdays, euribor3m, emp.var.rate, and nr.employed.
+```{r cor and pair.panels}
+# correlations
+institution %>% select(age, duration, campaign, pdays, euribor3m, emp.var.rate, nr.employed) %>% cor()
+# Pair Panels
+institution %>% select(age, duration, campaign, pdays, euribor3m, emp.var.rate, nr.employed) %>% pairs.panels()
+```
+
+## B
+For each of these numeric variables - duration, emp.var.rate, cons.price.idx, and cons.conf.idx
+### (i)
+(i) Show a boxplot of this numeric variable by y.
+```{r (i) Show a boxplot of this numeric variable by y}
+boxplot(duration~y, data = institution)
+boxplot(emp.var.rate~y, data = institution)
+boxplot(cons.price.idx~y, data = institution)
+boxplot(cons.conf.idx~y, data = institution)
+```
+### (ii)
+(ii) Use the aggregate function with 'summary' to aggregate this variable by y. The output should be the six number statistics (i.e. min., 1st quantile, median, mean, 3rd quantile, and max.) of the variable (e.g., duration)aggregated by “yes” and “no” respectively of y.
+```{r Aggregation function}
+
+# this will not show in output until Knit.
+
+aggregate(duration~y, summary, data = institution) # duration
+aggregate(emp.var.rate~y, summary, data = institution) # emp.var.rate
+aggregate(cons.price.idx~y, summary, data = institution) # cons.price.idx
+aggregate(cons.conf.idx~y, summary, data = institution) # cons.conf.idx
+
+```
+# Task III
+
+## Shape of data: 
+
+Number of Instances: 100
+Number of Predictors: 19 (excluding the target variable)
+Number of Target Variables: 1 (y)
+
+## Columns of data: 
+
+### Numeric Variables:
+
+  age: Age of the individual.
+
+  duration: Duration of the contact in seconds.
+
+  campaign: Number of contacts performed during this campaign.
+
+  pdays: Number of days that passed after the client was last contacted.
+
+  previous: Number of contacts performed before this campaign for this client.
+
+  emp.var.rate: Employment variation rate - quarterly indicator.
+
+  cons.price.idx: Consumer price index - monthly indicator.
+
+  cons.conf.idx: Consumer confidence index - monthly indicator.
+
+  euribor3m: Euribor 3 month rate - daily indicator.
+
+  nr.employed: Number of employees - quarterly indicator.
+
+### Categorical Variables:
+
+  job: Type of job.
+
+  marital: Marital status.
+
+  education: Education level.
+  
+  default: Has credit in default? (yes/no).
+
+  housing: Has housing loan? (yes/no).
+
+  loan: Has personal loan? (yes/no).
+
+  contact: Contact communication type.
+
+  month: Last contact month of year.
+
+  day_of_week: Last contact day of the week.
+
+  poutcome: Outcome of the previous marketing campaign.
+  
+### Target Variable:
+
+  y: Has the client subscribed to a certified term deposit? (yes/no).
+
+## Types of data within column: 
+
+  Int(numeric) and Factor
+
+## Summary of Findings
+
+The dataset includes a mix of numeric and categorical variables with varying distributions.
+
+There are strong correlations between some economic indicators, such as nr.employed and emp.var.rate.
+
+The target variable y (subscription to a term deposit) can potentially be predicted using variables such as duration, euribor3m, emp.var.rate, and nr.employed due to their distribution and correlations observed.
+
+## Interpretation
+
+Duration is a critical variable, though it needs careful handling due to its post-contact nature.
+
+Economic indicators like emp.var.rate, nr.employed, and euribor3m could be significant predictors for subscription likelihood.
+
+Categorical variables like job, education, and poutcome provide useful segmentation of clients, impacting the predictive model's accuracy.
+
+The insights suggest that a combination of economic indicators, client demographics, and contact-related factors will be crucial in building a predictive model for term deposit subscriptions.

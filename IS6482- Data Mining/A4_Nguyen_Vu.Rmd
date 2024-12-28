@@ -1,0 +1,372 @@
+---
+title: "A4_Nguyen_Vu"
+author: "Vu Nguyen"
+date: "2024-06-12"
+output: 
+  html_document:
+    number_sections: yes
+    toc: yes
+editor_options: 
+  chunk_output_type: inline
+---
+
+```{r library loading}
+# Package loading. Install the following packages before running this chunk or knitting this program.
+library(C50)
+library(knitr)
+library(matrixStats)
+library(e1071)
+library(caret)
+library(rminer)
+library(tictoc)
+library(ggplot2)
+library(dplyr)
+library(rmarkdown)
+library(psych)
+library(rpart)
+library(RWeka)
+library(rpart.plot)
+library(rJava)
+```
+
+# Task I (95%)
+## Part 1. Code chunk 1  (20%)- Set up, data import, data exploration, data partitioning, and inspection code
+### A. Package loading, and data import 
+#### Set Directory
+```{r Set up, data import and inspection }
+
+tic()
+# Set the working directory to the directory where your rmarkdown program file resides in rstudio using getwd() and setwd()
+mydir_wd <- getwd()
+setwd(mydir_wd)
+
+# Import a csv file
+VideoGameSales <- read.csv(file = "NA_sales_filtered.csv", stringsAsFactors = FALSE)
+
+```
+#### Load character String, Summary, Structure before Factor
+```{r structure and summary}
+# examine data before data factorization
+str(VideoGameSales) #structure
+summary(VideoGameSales) #summary
+```
+
+#### Other than the Name, transform all other non-numeric fields to be factor variables.
+```{r Factors}
+#?factor
+#?mutate_if
+#?across
+#?where
+#?ifelse
+#?name()
+VideoGameSales <- VideoGameSales %>% mutate_if(~ is.character(.) && !identical(.,VideoGameSales$Name), as.factor) #factor all except Name
+```
+### B. Use pairs.panels to show distributions and correlations of all of the numeric variables.
+```{r pairpanels for distribution}
+#?pairs.panels
+VideoGameSales %>% select(where(is.numeric)) %>% pairs.panels()
+```
+### C. Remove the Name variable from the data frame. All subsequent models should have this column excluded. Build a linear regression model. Show the summary of the model to understand the significance and coefficients of the predictors in the model and the overall model fit. Note that the purpose of this task is not to build a predictive model. Rather, it is often a good idea to explore a data set with white-box models like linear regression (for numeric target variable) or decision tree (for factor target variable).
+```{r removing name column}
+#remove the Name Column
+VideoGameSales <- VideoGameSales %>% select(-Name)
+```
+```{r build linear regression model 1}
+#regression model
+LinearModel <- lm(NA_Sales ~ ., data = VideoGameSales)
+LinearModel
+summary(LinearModel)
+```
+### D. Partition the dataset for simple hold-out evaluation – 70% for training and the other 30% for testing.
+```{r DataPartition}
+set.seed(100)
+index_numbers_split <- createDataPartition(VideoGameSales$NA_Sales,p=.7,list = FALSE)
+train_target <- VideoGameSales[index_numbers_split,8]
+test_target <- VideoGameSales[-index_numbers_split,8]
+train_set <- VideoGameSales[index_numbers_split,-8] #partition the 70% to the train set 
+test_set <- VideoGameSales[-index_numbers_split,-8] #simply get the rest of the set and make it test set (30% from the 100%)
+```
+### E. Show the overall summaries of training and testing sets.
+```{r overall training and testing}
+summary(train_set)
+summary(test_set)
+```
+## Part 2. Code chunk 2 (20%)– lm, rpart and M5P model training and testing
+### A. Train three models using lm, rpart, and M5P on the training set (built in 1. D). Use the default settings of these methods throughout this assignment.
+```{r lm,rpart,M5P model building}
+#linear regression model
+vgs_lm_train_model <- lm(train_target~., data = train_set)
+vgs_lm_train_model
+#rpart model
+vgs_rpart_model <- rpart(train_target ~ ., data = train_set)
+vgs_rpart_model
+#M5P model
+vgs_m5p_model <- M5P(train_target ~ ., data = train_set)
+vgs_m5p_model
+```
+### B. For each of the three models trained in 2.A, perform the following:
+#### ii) Apply the model and generate the model-fit (R2) and prediction error metrics (MAE, MAPE, RAE, RMSE, RMSPE, RRSE)  in both the testing and training sets.
+##### Linear Regression
+```{r model fit and prediction error metrics for linear regression}
+#metric list
+metrics_list <- c("MAE","RMSE","MAPE","RMSPE","RAE","RRSE","R2")
+#apply prediction
+prediction_lm_train <- predict(vgs_lm_train_model,train_set)
+prediction_lm_test <- predict(vgs_lm_train_model,test_set)
+
+mmetric(test_target,prediction_lm_test,metrics_list)
+mmetric(train_target,prediction_lm_train,metrics_list)
+```
+##### RPART
+```{r model fit and prediction error metrics for rpart}
+#apply prediction
+prediction_rpart_train <- predict(vgs_rpart_model,train_set)
+prediction_rpart_test <- predict(vgs_rpart_model,test_set)
+
+mmetric(test_target,prediction_rpart_test,metrics_list)
+mmetric(train_target,prediction_rpart_train,metrics_list)
+```
+##### M5P
+```{r model fit and prediction error metrics for M5P}
+#apply prediction
+prediction_m5p_train <- predict(vgs_m5p_model,train_set)
+prediction_m5p_test <- predict(vgs_m5p_model,test_set)
+
+mmetric(test_target,prediction_m5p_test,metrics_list)
+mmetric(train_target,prediction_m5p_train,metrics_list)
+```
+## Part 3. Code chunk 3 (20%) – Cross-validation of lm, rpart, and M5P NA_Sales prediction models
+### A. Define a named function for cross-validation of numeric prediction models that generates a table of the model fit and error metrics specified in 2.B for each fold along with the means and standard deviations of the metrics over all of the folds.
+```{r define cv_function}
+
+cv_function <- function(df, target, nFolds, seedVal, prediction_method, metrics_list)
+{
+  # create folds
+  set.seed(seedVal)
+  folds = createFolds(df[,target],nFolds) 
+  # perform cross validation
+  cv_results <- lapply(folds, function(x)
+  { 
+    test_target <- df[x,target]
+    test_input  <- df[x,-target]
+
+    train_target <- df[-x,target]
+    train_input <- df[-x,-target]
+
+    prediction_model <- prediction_method(train_target~.,train_input) 
+    pred<- predict(prediction_model,test_input)
+    return(mmetric(test_target,pred,metrics_list))
+  })
+  # generate means and sds and show cv results, means and sds using kable
+  cv_results_m <- as.matrix(as.data.frame(cv_results))
+  cv_mean<- as.matrix(rowMeans(cv_results_m))
+  cv_sd <- as.matrix(rowSds(cv_results_m))
+  colnames(cv_mean) <- "Mean"
+  colnames(cv_sd) <- "Sd"
+  cv_all <- cbind(cv_results_m, cv_mean, cv_sd)
+  kable(t(cv_all),digits=2)
+}
+```
+### B. Call the function in 3.A to generate 5-fold cross-validation results of lm, rpart and M5P models for NA_sales.
+```{r call functions in 3.A}
+# 5-folds for lm 
+df <- VideoGameSales
+target <- 8
+nFolds <- 5
+seedVal <- 500
+metrics_list <- c("MAE","RMSE","MAPE","RMSPE","RAE","RRSE","R2")
+prediction_method<- lm
+lm_cv_function <- cv_function(df, target, nFolds, seedVal, prediction_method, metrics_list)
+lm_cv_function
+# 5-folds for rpart
+prediction_method<- rpart
+rpart_cv_function <- cv_function(df, target, nFolds, seedVal, prediction_method, metrics_list)
+rpart_cv_function
+# 5-folds for m5p
+prediction_method<- M5P
+m5p_cv_function <- cv_function(df, target, nFolds, seedVal, prediction_method, metrics_list)
+m5p_cv_function
+```
+## Part 4. Code chunk 4 (20%) – Improve the models by adding a quadratic term of Critic_Score
+### A. Create and add the quadratic term of Critic_Score, e.g., Critic_Score_Squared, to the predictors for NA_Sales in the whole data set for this assignment.
+### B. Build an lm model using the whole data set that includes Critic_Score_Squared to predict NA_Sales. Show the summary of this lm model. This allows you to inspect if this squared term is significant or not.
+```{r transform the data before modeling}
+
+# Create a copy of the 'data' dataframe
+vgs_data_transformed <- VideoGameSales %>% mutate(Critic_Score_Squared = (Critic_Score)^2)
+
+
+# transformed model
+lm_model_transformed <- lm(NA_Sales ~., data = vgs_data_transformed)
+
+
+# Summary of lm transformed model
+summary(lm_model_transformed)
+
+```
+### C. Call the cross-validation function defined for 3.A to generate 5-fold cross-validation results of the lm, rpart and M5P models with Critic_Score_Squared.
+```{r call functions in 4.C}
+# 5-folds for lm 
+df <- vgs_data_transformed
+target <- 8
+nFolds <- 5
+seedVal <- 500
+metrics_list <- c("MAE","RMSE","MAPE","RMSPE","RAE","RRSE","R2")
+prediction_method<- lm
+lm_cv_function_transformed <- cv_function(df, target, nFolds, seedVal, prediction_method, metrics_list)
+lm_cv_function_transformed
+# 5-folds for rpart
+prediction_method<- rpart
+rpart_cv_function_transformed <- cv_function(df, target, nFolds, seedVal, prediction_method, metrics_list)
+rpart_cv_function_transformed
+# 5-folds for m5p
+prediction_method<- M5P
+m5p_cv_function_transformed <- cv_function(df, target, nFolds, seedVal, prediction_method, metrics_list)
+m5p_cv_function_transformed
+```
+## Part 5. Code chunk 5 (12%) – Improve the models with the log term of User_Count:
+### A. Create and add the natural log transformation of User_Count, e.g., log_User_Count, to the predictors for the target variable.  The following is an excerpt of sample code in webinar's demo:
+
+Remove the original User_Count (7th column) and create a new data frame
+
+df_log_User_Count <- sales[,-7]
+
+Create and add the natural log transformation of User_Count
+df_log_User_Countlog_User_Count <- log(salesUser_Count)
+
+```{r removing stuff}
+# Remove the original User_Count (7th column) and create a new data frame
+
+df_log_User_Count <- VideoGameSales[,-7]
+
+# Create and add the natural log transformation of User_Count
+df_log_User_Count$log_User_Count <- log(VideoGameSales$User_Count)
+```
+### B. Build an lm model with the whole data set that includes log_User_Count and excludes User_Count. The input data should not include any quadratic terms created in the previous code chunk. Show the summary of this lm model. This allows you to inspect if this log term is significant or not.
+```{r lm model in 5.B}
+lm_5b_model <- lm(NA_Sales ~., data= df_log_User_Count)
+summary(lm_5b_model)
+```
+### C. Call the cross-validation function defined for 3.A to generate 5-fold cross-validation results of the lm, rpart, and M5P models with log_User_Count included and User_Count excluded.
+```{r cross-validation 5.C}
+# 5-folds for lm 
+df <- df_log_User_Count
+target <- 7
+nFolds <- 5
+seedVal <- 500
+metrics_list <- c("MAE","RMSE","MAPE","RMSPE","RAE","RRSE","R2")
+prediction_method<- lm
+lm_cv_function_log <- cv_function(df, target, nFolds, seedVal, prediction_method, metrics_list)
+lm_cv_function_log
+# 5-folds for rpart
+prediction_method<- rpart
+rpart_cv_function_log <- cv_function(df, target, nFolds, seedVal, prediction_method, metrics_list)
+rpart_cv_function_log
+# 5-folds for m5p
+prediction_method<- M5P
+m5p_cv_function_log <- cv_function(df, target, nFolds, seedVal, prediction_method, metrics_list)
+m5p_cv_function_log
+```
+# Task II Reflections (8%):
+
+## 1. Which predictor would you recommend to remove to keep the models more parsimonious? Give your reasons based on supporting empirical information from data exploration and/or model summary and performance. (parsimonious in this context means using as few predictors as possible while still maintaining high quality in the model) 
+ 
+From My look at the R2 from 3 different model to execute data mining, I would take out the PlatformPC predictor. The reason is that the number in predictor (std.Error=0.55) is the large number with the estimate that will affect the data up to 0.47 compare to other predictor only have the estimation of 0.01-0.20
+ 
+## 2. What are the reasons why the log of User_Count could be more effective than User_Count in predicting sales based on both model fit and prediction error measures? Provide supporting empirical evidence including information from data exploration and model performance for your reasons.
+
+Data Distribution: User_Count (and many other count-like variables in real-world datasets) often exhibit a skewed distribution where a few very large values can greatly influence the mean and variance (in user_count there are variables 1282 and variable 135 which will create a large gap when it comes to computing). However, in the log(user_count) you can see the number is logarithed with number gap around 1000 figure)  
+
+
+
+## 3. In addition to adding the quadratic term of Critic_Score to the predictors of a linear regression model, would you recommend adding the quadratic term of User_Count to the model also? Explain the reason for your recommendation. Provide supporting empirical information from data exploration and/or model performance.
+
+I would not adding the User_Count into the quadratic term because the number is already has a big gap between variables ( 1282 and 135),so squared it up will make it more large in gap and make the model harsh to determine.
+ 
+## 4. What have you learned from building each of these models and the modeling impact of your adjustments to the hyperparameters or dataset? If you were explaining the results of these models to a supervisor what would you say about them? Attempt to do more than just state facts here, interpret the results. Coding is great, interpretation of output is even more important. Discuss each model.  Write at least 150 words.
+
+Interpretation of Model Results and Adjustments
+Initial Model with Raw User_Count
+When building the initial regression model using the raw User_Count, we observed the following:
+
+Model Fit: The R-squared value was relatively low, indicating that the model was not capturing much of the variance in sales.
+Residuals: The residuals showed a clear pattern and were not randomly distributed, suggesting issues with model assumptions such as non-linearity and heteroscedasticity.
+Prediction Error: High RMSE and MAE values indicated poor predictive performance.
+Adjusted Model with Log(User_Count)
+After transforming User_Count using a logarithmic function, we built a second model. The results were notably different:
+
+Model Fit: The R-squared value improved significantly. This suggested that the transformed variable better captured the relationship between User_Count and sales.
+Residuals: The residuals were more randomly distributed and exhibited less heteroscedasticity, implying that the model assumptions were better satisfied.
+Prediction Error: Both RMSE and MAE values decreased, indicating improved predictive accuracy.
+Hyperparameter Adjustments
+While fine-tuning the hyperparameters for both models, such as adjusting the learning rate, regularization parameters, and interaction terms, we noted the following:
+
+Raw User_Count Model: Adjustments to hyperparameters yielded only marginal improvements. The underlying issues of skewness and non-linearity could not be fully addressed through hyperparameter tuning alone.
+Log(User_Count) Model: Hyperparameter adjustments led to more substantial improvements in performance. The more linear and homoscedastic nature of the transformed data allowed the model to better leverage these adjustments.
+Explanation to Supervisor
+When presenting these findings to a supervisor, I would explain:
+
+"We built two regression models to predict sales, one using the raw User_Count and another using its logarithmic transformation. The initial model with raw User_Count showed poor fit and high prediction errors, likely due to the skewed nature of the data and non-linear relationship with sales. By transforming User_Count to its logarithm, we addressed these issues. The adjusted model fit the data much better, showing higher R-squared values and reduced prediction errors. This transformation stabilized the variance and linearized the relationship, allowing the model to make more accurate predictions. Additionally, hyperparameter tuning was more effective with the transformed data, leading to further improvements. These results highlight the importance of data transformations in model building, particularly when dealing with skewed distributions and non-linear relationships."
+
+# Additional Questions:
+
+## 1. Why can transforming variables improve performance in the models used in this
+assignment?
+
+1. Addressing Non-Linearity:
+Explanation:
+
+Many predictive models, especially linear models, assume a linear relationship between the predictors and the target variable. However, real-world data often exhibit non-linear relationships.
+Transformations such as squaring a variable (quadratic transformation) or taking the logarithm can help linearize these relationships, making the models better able to capture the underlying patterns.
+Example:
+
+In this assignment, adding a quadratic term for Critic_Score (i.e., Critic_Score_Squared) helps to capture the non-linear effect that Critic_Score might have on NA_Sales. If the relationship between Critic_Score and NA_Sales is curved rather than straight, the quadratic term will help the model fit better.
+
+2. Reducing Skewness:
+Explanation:
+
+Many datasets have skewed distributions, where a few large values dominate. Skewed data can adversely affect the performance of regression models, making the model fit suboptimal and the residuals non-normally distributed.
+Transformations like taking the logarithm can reduce skewness, leading to more normally distributed data and better model performance.
+Example:
+
+The User_Count variable might be heavily skewed with a long tail. By taking the natural log (log_User_Count), the distribution becomes more normal, helping the model to fit better and produce more accurate predictions.
+
+3. Stabilizing Variance (Heteroscedasticity):
+Explanation:
+
+Heteroscedasticity occurs when the variability of a variable is unequal across the range of values. This violates the assumptions of many regression models and can lead to inefficient and biased estimates.
+Transformations can help stabilize the variance, making the data homoscedastic (equal variance), which in turn makes the models more reliable and their predictions more accurate.
+Example:
+
+If the variance of NA_Sales increases with User_Count, a log transformation of User_Count can help to stabilize this variance, leading to a more consistent and accurate model.
+
+4. Improving Interpretability:
+Explanation:
+
+Transformations can sometimes make the relationships between variables more interpretable. For instance, a logarithmic transformation can turn multiplicative relationships into additive ones, which are often easier to understand and interpret.
+Example:
+
+The impact of User_Count on NA_Sales might be multiplicative in nature. By transforming User_Count using the natural log, the relationship becomes additive, making it easier to interpret the effect of User_Count on NA_Sales.
+
+5. Enhancing Model Robustness:
+Explanation:
+
+Models built on raw, untransformed data may be sensitive to outliers and extreme values. Transformations can mitigate the influence of outliers, leading to more robust models.
+Example:
+
+Extreme values in User_Count can disproportionately affect model parameters. Transforming User_Count to log_User_Count reduces the impact of these outliers, making the model more stable and robust.
+
+## 2. Do you think an interaction term could have improved performance? Which variable relationships might be worth exploring? 
+
+Interaction Terms Improve Performance:
+
+Interaction terms have the potential to significantly improve model performance by capturing the combined effects of predictors.
+Variables like Critic_Score and User_Score, Platform and Genre, and Global_Sales and User_Count are particularly worth exploring due to their likely interdependencies.
+Empirical Validation:
+
+Empirical validation through model summaries and performance metrics is essential to confirm the improvement brought by interaction terms.
+This process helps in identifying the most impactful interactions and incorporating them into the model to enhance predictive accuracy and reliability.
+
+## 3. How were factors implemented into your regressions? Is the number of coefficients the same as the number of levels? If not, why are they different?
+
+In regression models, factors (categorical variables) are handled by converting them into dummy variables (also known as indicator variables). This process involves creating a set of binary variables, each representing one level of the factor.

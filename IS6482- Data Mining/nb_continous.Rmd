@@ -1,0 +1,84 @@
+---
+title: "naive bayes for continuous features"
+author: "Matt Pecsok"
+date: "2023-07-26"
+output: html_document
+---
+
+
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+
+```{r model}
+library(e1071)
+
+
+nb_model1 <- naiveBayes(Species ~ Sepal.Width,data = iris,laplace = 0) 
+nb_model1
+
+iris[1,]
+predict(nb_model1,iris[1,],type='raw')
+```
+The probability density function (PDF) of a Gaussian distribution is given by:
+
+$$ f(x) = \frac{1}{{\sigma \sqrt{2\pi}}} \exp\left(-\frac{{(x - \mu)^2}}{{2\sigma^2}}\right) $$
+
+Where:
+- \( x \) is the value of the feature.
+- \( \mu \) is the mean of the feature in the training data for a specific class.
+- \( \sigma \) is the standard deviation of the feature in the training data for the same class.
+
+
+```{r function to calculate probability assuming gaussian distribution}
+
+
+# Function to calculate the probability of a value given the mean and standard deviation
+calculate_probability <- function(x, mean_x, sd_x) {
+  exponent <- exp(-(x - mean_x)^2 / (2 * sd_x^2))
+  probability <- 1 / (sqrt(2 * pi) * sd_x) * exponent
+  return(probability)
+}
+
+```
+
+```{r predict for a given sepal width}
+
+# Given a new Sepal.Width value, predict the species using Naive Bayes
+new_sepal_width <- 3.5
+
+# Calculate the probabilities for each species
+p_setosa <- calculate_probability(x = new_sepal_width, mean_x =  3.428,  sd_x =  0.3790644)
+p_versicolor <- calculate_probability(new_sepal_width, mean_x =  2.770,  sd_x =  0.3137983)
+p_virginica <- calculate_probability(new_sepal_width, mean_x =  2.974,  sd_x =  0.3224966)
+
+normalization_value <- p_setosa+p_versicolor +p_virginica
+
+# Print the probabilities
+cat("Probability of Setosa:", p_setosa / normalization_value, "\n")
+cat("Probability of Versicolor:", p_versicolor / normalization_value, "\n")
+cat("Probability of Virginica:", p_virginica / normalization_value, "\n")
+```
+
+# here we show how to do this for 2 features. 
+
+```{r two features}
+nb_model1 <- naiveBayes(Species ~ Sepal.Width + Sepal.Length,data = iris,laplace = 0) 
+nb_model1
+```
+```{r r observation data }
+iris[1,]
+```
+
+```{r r data for prediction}
+predict(nb_model1,iris[1,],type='raw')
+```
+
+```{r two features cntd}
+p_setosa <- calculate_probability(x = 3.5 , mean_x =  3.428,  sd_x =  0.3790644) * calculate_probability(x = 5.1	, mean_x =  5.006,  sd_x =  0.3524897)
+p_versicolor <- calculate_probability(x = 3.5 , mean_x =  2.770,  sd_x =  0.3137983) * calculate_probability(x = 5.1	, mean_x =  5.936 ,  sd_x =  0.5161711)
+p_virginica <- calculate_probability(x = 3.5 , mean_x =  2.974 ,  sd_x =  0.3224966) * calculate_probability(x = 5.1	, mean_x =  6.588 ,  sd_x =  0.6358796)
+
+p_setosa / (p_setosa + p_versicolor + p_virginica)
+p_versicolor / (p_setosa + p_versicolor + p_virginica)
+p_virginica / (p_setosa + p_versicolor + p_virginica)
+```

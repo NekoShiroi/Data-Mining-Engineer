@@ -1,0 +1,224 @@
+---
+title: "Functions"
+author: "Matt Pecsok"
+date: "2023-08-17"
+output: 
+  html_document: 
+    toc: yes
+    number_sections: yes
+---
+
+```{r message=FALSE, warning=TRUE}
+library(tidyverse)
+```
+
+# Simple transformation without function
+
+Imagine we have 1 name and we want to apply multiple transformations to it. 
+
+```{r one name}
+
+name <- "dieGo!"
+
+name <- str_to_title(name)
+
+name <- str_replace_all(name,"\\!","")
+
+name
+
+```
+Not too bad right? This code is relatively straightforward and no unnecessary repetition is occurring in the code. 
+
+Now let's see how this code scales. Meaning how do we accomplish this same task when we need to do it, 2,3 10, 1000 times?
+
+Check out the code below when we do this same transform multiple times. Already this code is getting quite hard to read. In addition, we cannot handle and arbitrary number of conversions. We need this code to be more concise. 
+
+Welcome to the need for functions. 
+
+# Multiple transformations without function
+
+```{r multiple transforms}
+
+name <- "dieGo!"
+name <- str_to_title(name)
+name <- str_replace_all(name,"\\!","")
+name
+
+name <- "ValeNtinA!"
+name <- str_to_title(name)
+name <- str_replace_all(name,"\\!","")
+name
+
+name <- "ISABELLA!"
+name <- str_to_title(name)
+name <- str_replace_all(name,"\\!","")
+name
+
+name <- "TIM!"
+name <- str_to_title(name)
+name <- str_replace_all(name,"\\!","")
+name
+
+name <- "jOSE!"
+name <- str_to_title(name)
+name <- str_replace_all(name,"\\!","")
+name
+
+```
+A named or user-defined function is code that can be run multiple times simply by referring to its name. 
+
+For example:
+
+Below we create a function that adds one and five and returns the result. Clearly this is not very useful, but it demonstrates how to make a very simple function and run it. 
+
+# Simple harcoded addition with a function
+
+```{r one and five}
+
+one_plus_five <- function() {
+  result = 1 + 5
+  return(result)
+}
+
+one_plus_five()
+
+one_plus_five()
+
+one_plus_five()
+
+one_plus_five()
+
+one_plus_five()
+```
+Next we build on the concept demonstrated above and add complexity to the function by adding what are known as parameters. Parameters allow us to pass values into a function. 
+
+We pass in the arguments 1,2 and 2,5, and 400,500 etc. the value of a parameter is called an argument. 
+
+# Simple dynamic addition with a function. Positional Arguments.
+
+```{r add two numbers}
+
+add_two_numbers <- function(number1,number2) {
+  result = number1 + number2
+  return(result)
+}
+
+add_two_numbers(1,2)
+
+add_two_numbers(2,5)
+
+add_two_numbers(400,500)
+
+add_two_numbers(.1,.2)
+
+add_two_numbers(100,100)
+```
+The function above is more useful because it has a more dynamic nature than the function without parameters. Can you see why this is true? 
+
+In the calls above we have parameters number1 and number2 by position. The first position maps to number1, the second position maps to number 2
+(position1,position2) = (number1,number2)
+
+What if I wanted to pass items out of order for some reason? This is common in programming. 
+
+# Named Arguments
+
+```{r named parameters}
+
+print_names <- function(last_name,first_name) {
+  full_name <- paste(first_name,last_name)
+  return(full_name)
+}
+
+print_names("Pecsok","Matt") # this is passing by position
+
+print_names(first_name = "Matt",last_name = "Pecsok") # here we pass by name, meaning we have told the function what parameters the arguments should be mapped to. notice the order is different than that from the position example. 
+
+```
+We can also have parameter defaults. This is useful if the programmer who created intends specific behavior unless overridden.
+
+Below the function specifies defaults of 2 and 3 for the parameters a and b respectively. Unless overridden the function will add 2+3 and give 5. 
+a and b can both be overridden if the user chooses. 
+
+In many data mining models use hyperparameters which are already have defaults supplied by the package developer. These defaults can be overridden, or not. 
+
+# Parameter Defaults
+
+```{r param defaults}
+
+add_numbers <- function(a=2,b=3) {
+  return(a+b)
+}
+
+add_numbers()
+
+add_numbers(b=5)
+
+add_numbers(b=5,a=9)
+
+```
+
+
+
+
+Now, let's leverage this new dynamic nature to accomplish repetitive tasks. In the previous code block we still had the call the function multiple times to get each result. In coding it's often the case that we need to run a function an arbitrary number of times. It could be 1, 100, 100000 etc. This means each function call must be handled by the code, not by the programmer. In the example above I have hardcoded the number of calls. I now need the calls themselves to be dynamic. 
+
+
+Below we will create a function that takes as an argument a vector of names and title cases them.
+ 
+# for loop with a function
+
+```{r for loop with function}
+
+fix_names <- function(name) {
+  
+  name <- str_replace_all(name,"\\!","")
+  name <- str_to_title(name)
+
+  return(name)
+}
+
+
+names <- c("!!dieGo", "EmilY", "ISAB!!!ELLA","JAME!!S", "OLIVIA", "D!ANIEL!","CAMILE", "CARLOS", "VALEN!!TINA!!")
+
+
+for (name in names) {
+  result <- fix_names(name)
+  print(result) # inside a for loop we must use print to show results
+}
+
+```
+
+This is much more dynamic code. We have fixed 9 names, in only 3 lines of code. But, we can make this even better! 
+
+the lapply function allows us to apply a function to a list and run it as many times as the list is long. 
+
+Wow! Check out how simple that is. Just one line of code to run the function on many names!
+
+# lapply with a function 
+
+```{r the lapply }
+lapply(names,fix_names)
+```
+Be aware, reuse of variable names can make things confusing for you. Variables have "scope" meaning they can be different inside of and outside of functions. In the example below we set the variable "a" outside of a function. We then define a new variable called "a" inside of the function. Outside the function "a" retains its value of 6, but inside we've set it to 10. 
+
+Consider keeping variable name different within an outside of functions to make sure scope is not an issue. 
+
+# Variable scope
+
+```{r variables inside of and outside of functions - scope}
+
+a <- 6
+
+add_one_to_a <- function()
+{
+  a <- 10
+  
+  return(a + 1)
+}
+
+add_one_to_a() # pass in a with the value of 6. notice how the result is 11, not 7. we've overridden the value of a within the function. 
+
+print(a)
+
+```
+

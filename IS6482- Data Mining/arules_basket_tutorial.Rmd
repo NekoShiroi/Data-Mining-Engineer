@@ -1,0 +1,294 @@
+---
+title: "arules_basket"
+author: "Matt Pecsok"
+date: "2023-11-08"
+output: html_document
+editor_options: 
+  chunk_output_type: inline
+---
+
+#libraries loading data
+
+```{r}
+library(arules)
+library(arulesViz)
+library(tidyverse)
+basket_trans <- read.transactions("groceries.csv", sep = ",") 
+```
+
+# EDA
+
+## shape of the data
+
+9835 rows and 169 columns. 
+
+That is 9835 transactions, and 169 unique items in the shopping carts. 
+
+```{r}
+basket_trans
+```
+There are 1662115 cells in our data. (rows*columns)
+
+## computing total cells
+
+```{r}
+# 169 column * 9835 rows. (a row is a transaction)
+basket_trans@data@Dim[1]
+basket_trans@data@Dim[2]
+
+# 1662115 cells
+basket_trans@data@Dim[1]*basket_trans@data@Dim[2]
+```
+This is a Sparse Matrix. Most of the data is empty. This saves memory. 
+What proportion is Sparse?
+## non-sparse proportion (density)
+
+```{r}
+basket_trans_summary <- summary(basket_trans)
+basket_trans_summary@density
+# the sparse matrix is only ~ 3% non-zero.
+```
+How many cells are not sparse?
+## non-sparse cell count
+
+```{r}
+basket_trans_summary@density*basket_trans@data@Dim[1]*basket_trans@data@Dim[2]
+
+# total items are 43367
+```
+
+each transaction has 1 or more items contained within
+
+there are 2159 transactions with a single item
+there are 1643 transactions with two items
+there is one transaction with 32 items. 
+
+## set sizes by count
+
+```{r}
+basket_trans_summary@lengths
+barplot(basket_trans_summary@lengths,main="transaction counts by size")
+```
+Count the number of transactions with each single item.
+
+2513 transactions contain 'whole milk'
+1715 transactions contain 'soda'
+
+## transaction counts for items
+
+```{r}
+sort(itemFrequency(basket_trans, type = "absolute"), decreasing = TRUE)
+```
+Plot the top 10 items by relative frequency (proportion of transactions with the item.)
+
+## relative frequency plot. top 10.
+
+```{r}
+itemFrequencyPlot(basket_trans,topN = 10,type='relative')
+```
+Plot the top 10 items by absolute frequency (number of transactions with the item.
+## absolute frequency plot. top 10.
+
+```{r}
+itemFrequencyPlot(basket_trans,topN = 10,type='absolute')
+```
+
+Plot all items by their relative frequency. 
+
+
+## set lengths
+
+
+how many items are commonly in the shopping cart?
+On average 4.4, the median is 3. So some customers have many more than 3 skewing the 
+average up from the median. 
+
+
+```{r}
+basket_trans_summary@lengthSummary
+```
+# data transformations (wide to long and long to wide)
+
+## wide to long dataframe format
+
+What if we want long non-sparse format instead? This is easier to use in tidyverse syntax. Use toLongFormat. Unfortunately this function only returns the transaction id and item id. We must join the item name manually so we know the name of each item. 
+
+### How to access the item names. 
+
+```{r}
+itemLabels(basket_trans)[0:5] #these are just the unique item names in a vector
+```
+### convert to wide format. 
+
+This creates a dataframe. 
+
+```{r}
+#itemLabels(basket_trans)
+long_basket <- toLongFormat(basket_trans, decode = FALSE,c("ID", "item_id"))
+
+# join the item name to the item ids. 
+long_basket$item_name <- itemLabels(basket_trans)[long_basket$item_id]
+
+long_basket[0:10,]
+#cbind(toLongFormat(itemInfo(basket_trans), decode = FALSE))
+```
+
+The downside to this is that we have now moved away from a sparse format and must store the each item name multiple times. For example we have the 'whole milk' name stored redundantly 2513 times rather than just storing the id. The trade-off here is easy manipulation vs memory and compute.  
+
+### filter long format with dplyr
+
+```{r}
+long_basket %>% filter(item_name=='whole milk') %>% count()
+long_basket %>% filter(item_name=='whole milk') %>% head(3)
+```
+
+```{r}
+long_basket %>% filter(item_name=='whole milk') %>% head()
+```
+Now find all transactions that contain the item 'whole milk'. Show all of the items in the cart that also includes 'whole milk'
+
+
+```{r}
+long_basket %>% filter(ID %in% filter(long_basket, item_name == 'whole milk')$ID) %>% head(10)
+```
+
+
+we can also use wide format in Tidyverse. Here we pivot the data from long format (which we just made from the apriori transaction dataset) back to wide format, but in this case it's a tibble which may be easier to work with in some scenarios instead of a matrix.
+
+## long to wide Tibble
+
+Here we pivot the long format back to wide. We use the transaction ID to define each row, we use the item name for the names of each column and we use the item_id for the value. 
+
+```{r}
+tidy_basket_wide <- pivot_wider(long_basket, id_cols = ID, names_from = item_name, values_from = item_id)
+
+tidy_basket_wide
+```
+
+
+# Apriori Algorithm
+
+## Apriori defaults
+
+Now that we have a good understanding of the data. Use the apriori algorithm to begin extracting rules. 
+
+Try apriori with the defaults. The output shows the defaults which are also listed here.
+
+confidence = 0.8
+support = 0.1
+minlen = 1
+
+Unfortunately we generated 0 rules. These thresholds are too high.
+
+We would have needed 983 transactions to contain a set to be included as a rule. 
+
+
+
+```{r}
+rules <- apriori(basket_trans)
+rules
+```
+Use extremely low thresholds to generate many rules. We generate 40943 rules that meet our minimum thresholds. 
+
+## Apriori user thresholds
+
+with support 0.001 and confidence 0.001. minlen = 2
+
+Generates 40943 rules from 9835 transactions. 
+
+Save the rules in a new variable.
+
+```{r}
+rules <- apriori(basket_trans,parameter = list(support = 0.001, confidence = 0.001, minlen = 2))
+rules
+```
+### Rules summary
+
+```{r}
+summary(rules)
+```
+The max support in our dataset is 0.074835.
+The max confidence is 1.
+The max lift is 35.7158.
+
+
+We have 
+rule length distribution (lhs + rhs):sizes
+    2     3     4     5     6 
+ 5962 20493 12548  1880    60 
+ 
+### inspect 20 rules
+
+
+```{r}
+inspect(rules[0:20])
+```
+
+### sort rules by lift. inspect 20.
+```{r}
+inspect(sort(rules, by = "lift")[1:20]) # find the top 20 lifts
+```
+It's probably obvious that buying ham implies someone will buy processed or sliced cheese. It's always good to confirm our "common sense' with data however.
+
+### Subset rules by HAM
+
+Find rules with the item ham in them. 
+
+```{r}
+hamrules <- subset(rules, items %in% "ham")
+inspect(sort(hamrules, by = "lift")[1:10])
+```
+
+## Subset by Yogurt
+
+
+### InspectDT
+
+Having a knitted document I can interact with is quite nice. It allows me to ask questions without coding. It could also allow your downstream stakeholders to do the same! InspectDT creates a datatable that can be allow the user to search and filter in the knitted document. 
+
+Let's focus on yogurt buyers here.
+What do people who buy yogurt also buy?
+This one was a bit surprising to me. Those who buy yogurt also tend to buy rice. 
+
+```{r}
+yogurtrules <- subset(rules, items %in% "yogurt")
+inspectDT(sort(yogurtrules, by = "lift"))
+
+```
+
+### Interactive matrix plot
+
+```{r}
+plot(yogurtrules, method = "matrix", engine = "html") 
+```
+
+### Graph plot - Yogurt
+
+```{r}
+plot(yogurtrules, method = "graph", engine = "html")
+```
+
+### inspectDT - yugurt and rice
+
+%ain% request rules that must have both yogurt and rice. 
+
+```{r}
+yogurt_rice_rules <- subset(rules, items %ain% c("yogurt","rice"))
+inspectDT(sort(yogurt_rice_rules, by = "lift"))
+```
+
+### Graph plot - Yogurt and Rice
+
+```{r}
+plot(yogurt_rice_rules, method = "graph", engine = "html")
+```
+
+# Rule Explorer - Shiny Dashboard.
+
+Note you must go into the console and accept the request to install additional packages for this to work. It will wait for you to enter "1" and press enter. 
+
+```{r}
+ruleExplorer(basket_trans)
+```
+
+

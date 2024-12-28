@@ -1,0 +1,428 @@
+---
+title: "A7_Nguyen_Vu"
+author: "Vu Nguyen"
+date: "May 22, 2024"
+output: 
+  html_document:
+    number_sections: yes
+    toc: yes
+editor_options: 
+  chunk_output_type: inline
+---
+# Initial setup & Loading Libraries
+
+```{r Set up and import data knit}
+
+# Load the following packages. Install them first if necessary.
+
+knitr::opts_chunk$set(echo = T, warning = F, Message=F)
+options(rgl.useNULL = TRUE)
+library(C50)
+library(caret)
+library(rpart)
+library(rpart.plot)
+library(rJava)
+library(RWeka)
+library(kernlab)
+library(rminer)
+library(matrixStats)
+library(knitr)
+library(tictoc) 
+library(tidyverse)
+library(psych)
+library(arules)
+library(ggplot2)
+library(dplyr)
+library(rmarkdown)
+library(rpart.plot)
+library(rJava)
+library(e1071)
+tic()
+
+```
+
+# Set Directory
+```{r Set up, data import and inspection }
+
+# Set the working directory to the directory where your rmarkdown program file resides in rstudio using getwd() and setwd()
+mydir_wd <- getwd()
+setwd(mydir_wd)
+
+# Import a csv file
+census <- read.csv(file = "census.csv", stringsAsFactors = FALSE)
+
+```
+
+#Task I - EDA (25%) - Perform exploratory data analysis on the dataset. Add text to note items from code blocks you have observed. 
+
+## Is this target variable categorical or numeric? 
+
+- Answers: this target variable is categorical (its class is character)
+
+## List all of the supervised models covered in class and note which are appropriate to use for the task in this project and which are not. Do not build any models that are inappropriate for the task. all of supervised models covered in class:
+
+- Linear Regression (appropriate for numeric target)
+
+- Logistic Regression (appropriate for binary categorical target)
+
+- Decision Trees (appropriate for both numeric and categorical targets)
+
+- Random Forest (appropriate for both numeric and categorical targets)
+
+- Support Vector Machines (SVM) (appropriate for both numeric and categorical targets)
+
+- k-Nearest Neighbors (k-NN) (appropriate for both numeric and categorical targets)
+
+- Naive Bayes (appropriate for categorical target)
+
+- Neural Networks (appropriate for both numeric and categorical targets)
+
+- the target variable is categorical, and we can use Logistic Regression Models, Decision Trees, SVM, k-NN, Naive Bayes and Neural Network.
+
+## What is the distribution of the target variable? 
+
+- Answers: There are 2 type of target varialbe: Lower or equal to 50K takes approximately 75.9% and Over 50K takes approximately 24.1% 
+
+## Examine the dataset
+```{r Examine the dataset}
+# examine data before data factorization
+
+str(census) #structure
+
+summary(census) #summary
+
+census %>% summarize(across(everything(), ~ sum(is.na(.)))) #check if there is any NA 
+census<- na.omit(census)
+
+# Check if there are any emty strings
+census %>%
+  summarize(across(everything(), ~ sum(. == ""))) %>% 
+  t() %>%
+  as.data.frame() %>%
+  filter(V1>0)
+
+# examine the target value
+target <- census$y
+class(target)
+
+#factorized the dataset
+census <- census %>% mutate_if(~ is.character(.), as.factor)
+
+#nlevels for target y
+nlevels(census$y)
+
+# Percentage table for target variable y
+census %>% pull(y) %>% table() %>% prop.table()*100 %>% round(2)
+
+# this will not show in output until Knit. Aggregate function between age, sex, race and y
+aggregate(race~y, summary, data = census) 
+aggregate(sex~y, summary, data = census)
+aggregate(age~y, summary, data = census)
+
+```
+## Visualize Data
+```{r Visualize Data}
+# Pairs.panels 
+census %>% select(where(is.numeric)) %>% pairs.panels()
+
+# correlations
+census %>% select(where(is.numeric)) %>% cor()
+
+# A barplot for target variable y
+census %>% ggplot() +
+  geom_bar(aes(x=y)) +
+  ggtitle("Barplot of Y")
+
+# Boxplot to compare between age, sex, race with target variable y
+boxplot(age~y, data = census)
+boxplot(sex~y, data = census)
+boxplot(race~y, data = census)
+
+#scatter plot for numeric and factor variables (age, sex and y)
+census %>% ggplot() + geom_point(aes(x=age,y=sex,color=y))
+
+```
+# Task II - Data Preparation (15%) - Prepare your data for modeling. What tasks should be performed to ensure your model metrics can be used to identify over/underfitting? 
+
+- Answers: To handle overfitting or underfitting, I did the finding the missing values, outliers that might skew the model, factorized all the categorical variables. I am going to do data partitioning and splitting in the next few code chunks.
+
+## Data preperation
+```{r data partitioning}
+
+set.seed(100)
+
+index_numbers_split <- createDataPartition(census$y,p=.7,list = FALSE)
+
+train_set <- census[index_numbers_split,-15] #partition the 70% to the train set 
+
+summary(train_set)
+
+test_set <- census[-index_numbers_split,-15] #simply get the rest of the set and make it test set (30% from the 100%)
+
+summary(test_set)
+
+train_target <- census[index_numbers_split,15] #get the train target
+
+test_target <- census[-index_numbers_split,15] #get the test target
+
+#  Set up parameters
+metrics_list <- c("MAE","RMSE","MAPE","RMSPE","RAE","RRSE","R2")
+metrics_list_two <- c("ACC","PRECISION","TPR","F1")
+
+#set up the tree
+c50_model <- C5.0(train_target ~., train_set, control = C5.0Control(CF=0.25), earlyStopping = FALSE, noGlobalPruning =FALSE)
+
+summary(c50_model)
+
+c50_model$size
+```
+
+# Task III - Model Building (30%) - Build a variety of models and keep them to show your efforts to achieve good performance.
+Your stakeholders prefer interpretability over performance. Consider this as you choose your models.
+
+## How many models are sufficient? Enough to show that you found underfitting, overfitting and a good balance between the two. Your stakeholders still want a good model however.
+
+## Which metrics are appropriate for the prediction task? 
+
+## Decision Tree Models
+```{r decision tree}
+# Predict for Train set
+tree_cf_train_predictions <- predict(c50_model,train_set)
+
+# Predict for Test set
+tree_cf_test_predictions <- predict(c50_model,test_set)
+
+# Confusion matrix Train models
+mmetric(train_target, tree_cf_train_predictions, metric="CONF")
+
+# Confusion matrix Test models
+mmetric(test_target, tree_cf_test_predictions, metric="CONF")
+
+# Accuracy, Precision, F1, TPR  for Test and Train
+mmetric(train_target, tree_cf_train_predictions, metrics_list_two)
+mmetric(test_target, tree_cf_test_predictions, metrics_list_two)
+
+
+```
+
+## Naive Bayes Models
+```{r Naive Bayes model}
+
+institution_nb <- naiveBayes(train_target ~., data= train_set)
+
+
+# Predict for Train set with NB institution
+nb1_train_predictions <- predict(institution_nb,train_set)
+
+# Predict for Test set with NB institution
+nb1_test_predictions <- predict(institution_nb,test_set)
+
+# Confusion matrix
+mmetric(test_target, nb1_test_predictions, metric="CONF")
+
+
+# Evaluate performance 
+mmetric(train_target,nb1_train_predictions,metrics_list_two) #train target eval
+mmetric(test_target,nb1_test_predictions,metrics_list_two) #test target eval
+
+
+```
+
+
+## SVM Models
+```{r svm models}
+# ksvm on train set
+ksvm_default_train <- ksvm(train_target ~.,data = train_set, kernel = "rbfdot", C=4)
+
+# prediction models
+pred_ksvm_train <- predict(ksvm_default_train,train_set) #train set predict
+pred_ksvm_test <- predict(ksvm_default_train,test_set) #test set predict
+
+# Confusion matrix
+mmetric(test_target, pred_ksvm_test, metric="CONF")
+
+# Evaluate performance 
+mmetric(train_target,pred_ksvm_train,metrics_list_two) #train target eval
+mmetric(test_target,pred_ksvm_test,metrics_list_two) #test target eval
+
+
+```
+ 
+## KNN Model
+```{r knn models}
+
+# IBk on train set
+IBk_default_train <- IBk(train_target ~.,data = train_set, control = Weka_control(K=45,X=TRUE, I=TRUE)) 
+
+# prediction models
+pred_IBk_train <- predict(IBk_default_train,train_set) #train set predict
+pred_IBk_test <- predict(IBk_default_train,test_set) #test set predict
+# Confusion matrix
+mmetric(test_target, pred_IBk_test, metric="CONF")
+
+# Evaluate performance 
+mmetric(train_target,pred_IBk_train,metrics_list_two) #train target eval
+mmetric(test_target,pred_IBk_test,metrics_list_two) #test target eval
+
+
+```
+
+# Task IV - Reflections (30%)
+
+## Model Performance Analysis:
+
+![Evaluate Performance for these Models.](C:/Users/nguye/Desktop/IS6482- Data Mining/benchmark.png)
+
+- Best Performing Model: The Decision Tree classifier performed the best overall with the highest accuracy of 86.77% and the highest precision and F1 scores for both classes.
+
+- Worst Performing Model: The Naive Bayes classifier had the lowest overall accuracy of 82.48% and the lowest precision and F1 scores for the ">50k" class.
+## Benchmark:
+
+- To quantify how much better the Decision Tree classifier (the best performing model) is compared to a majority rule classifier and a random classifier, let's calculate the improvement in accuracy.
+
+### Majority Rule Classifier:
+
+![Majority Rule Classifier.](C:/Users/nguye/Desktop/IS6482- Data Mining/benchmark1.png)
+
+
+- Assuming the majority class in the dataset is "<=50k" (which has a prevalence of 76%)
+
+
+### Random Classifier:
+
+![Random Rule Classifier.](C:/Users/nguye/Desktop/IS6482- Data Mining/benchmark2.png)
+- A random classifier would predict classes based on their prevalence in the training set. For simplicity, we assume a balanced random classifier (predicting "<=50k" 76% of the time and ">50k" 24% of the time) 
+
+### Decision Tree Classifier:
+
+- The Decision Tree classifier has an accuracy of 86.77%.
+
+### Improvement Over Baseline Models:
+
+- Improvement over Majority Rule Classifier: Improvement=86.77%−75.94%=10.83%
+
+- Improvement over Random Classifier: Improvement=86.77%−63.52%=23.25%
+
+### Conclusion: 
+
+- The Decision Tree classifier is 10.83% more accurate than the majority rule classifier.
+
+- The Decision Tree classifier is 23.25% more accurate than the random classifier.
+
+## Interpretation of Results
+
+### Analysis
+
+#### Precision:
+
+- Precision for <=50k: 89.56%
+
+- Precision for >50k: 76.13%
+
+- The model is more precise in predicting the low income class (<=50k) compared to the high income class (>50k).
+
+#### Recall:
+
+- Recall for <=50k: 93.47%
+
+- Recall for >50k: 65.65%
+
+- The model has a higher recall for the low income class (<=50k), indicating it is better at identifying most of the actual low income individuals.
+
+#### F1 Score:
+
+- F1 Score for <=50k: 91.48%
+
+- F1 Score for >50k: 70.50%
+
+- The F1 score, which is the harmonic mean of precision and recall, is higher for the low income class (<=50k), suggesting that the model performs better overall for this class.
+#### Conclusion:
+
+- The model is better at predicting those with low income (<=50k) compared to high income (>50k). This is indicated by higher precision, recall, and F1 scores for the low income class. The model has a better balance of precision and recall for the low income class, making it more effective at correctly identifying low income individuals.
+
+### SVM:
+
+- High accuracy and precision for the "<=50k" class but lower precision and recall for the ">50k" class.
+
+- Better at predicting low-income individuals accurately.
+
+### Naive Bayes:
+
+- Lower precision and recall for the ">50k" class, leading to lower overall accuracy and F1 scores.
+- More likely to misclassify high-income individuals as low-income.
+
+### Decision Tree:
+
+- Best balance between precision, recall, and F1 scores for both classes.
+- High precision and recall for both classes, making it the most reliable model in this comparison.
+
+## Why Chosen these models
+
+### 1. Naive Bayes
+
+Naive Bayes is a simple and effective probabilistic classifier based on Bayes' theorem with strong (naive) independence assumptions between the features. It is particularly useful for classification tasks for several reasons:
+
+- Simplicity and Speed: Naive Bayes is computationally efficient, making it suitable for large datasets.
+
+- Robustness to Irrelevant Features: Naive Bayes can handle irrelevant features well because it assumes feature independence.
+
+- Works Well with Categorical Data: The algorithm handles categorical data effectively and can be used in various classification problems.
+
+- Interpretable: The model provides clear probabilities for class membership, making it easy to understand the decision-making process.
+
+### 2. Decision Tree
+
+Decision Trees are versatile and widely-used algorithms for classification and regression tasks. Here are the key reasons for choosing Decision Trees:
+
+- Interpretability: Decision trees provide a clear, visual representation of decisions, which stakeholders can easily understand.
+Handling Non-linear Relationships: Decision trees can capture non-linear relationships between features and the target variable.
+
+- No Need for Feature Scaling: Unlike some algorithms, decision trees do not require feature scaling or normalization.
+Feature Importance: Decision trees can rank features based on their importance, providing insights into which features are most influential in predicting the target variable.
+
+- Flexibility: Decision trees can be used for both classification and regression tasks and can handle both categorical and continuous data.
+
+### 3. k-Nearest Neighbors (k-NN)
+
+- k-Nearest Neighbors (k-NN) is a simple, instance-based learning algorithm that classifies data points based on the majority class among their nearest neighbors.
+
+- Simplicity: k-NN is easy to understand and implement. It doesn't involve any complex parameter tuning or model training.
+
+- Non-parametric: k-NN is a non-parametric method, meaning it makes no assumptions about the underlying data distribution. This can be beneficial for datasets with complex distributions.
+
+- Versatility: k-NN can handle both classification and regression tasks, making it a flexible choice for various problems.
+Performance: With the right choice of k and appropriate distance metric, k-NN can provide competitive performance, especially for smaller datasets or datasets where the class boundaries are well-defined.
+
+- Local Decision Making: k-NN makes decisions based on local neighborhoods, which can be useful if the decision boundaries are highly irregular.
+
+### 4. Support Vector Machine (SVM)
+
+- Support Vector Machines (SVM) are powerful classifiers that work by finding the hyperplane that best separates the classes in the feature space.
+
+- Effective in High Dimensional Spaces: SVM performs well in spaces with many dimensions, which is useful when the dataset has a large number of features.
+
+- Margin Maximization: SVM focuses on maximizing the margin between classes, which can lead to better generalization and performance.
+
+- Flexibility with Kernels: SVMs can use different kernel functions (linear, polynomial, radial basis function, etc.) to handle non-linear decision boundaries. This makes SVMs highly flexible and capable of modeling complex relationships.
+
+- Regularization: SVM includes regularization parameters (like C and gamma), which help in preventing overfitting and improving model robustness.
+
+- Versatility: Like k-NN, SVM can handle both classification and regression tasks, making it a versatile choice for various types of problems.
+
+
+## Additional Questions:
+
+### Prioritizing Accuracy Over Interpretability:
+
+- If stakeholders prioritized accuracy over interpretability, the model selection might include more complex models like Gradient Boosting Machines (GBM) or deep neural networks, which typically offer higher accuracy but at the cost of interpretability.
+Model Tuning:
+
+- Tuning: To achieve good results, models like SVM and Random Forests required tuning of parameters such as cost and gamma for SVM, and the number of trees and mtry for Random Forest.
+Benchmarks: Benchmarks included cross-validation accuracy and comparison with baseline models.
+Significant Parameters: In SVM, parameters like cost and gamma were crucial. In Random Forest, ntree and mtry had a significant impact.
+
+### Data Splitting Method:
+
+- Method: Data was split using stratified sampling to ensure both training and testing sets have a similar distribution of the target variable.
+
+- Reason: This method ensures that the model is trained and evaluated on representative samples of the data, preventing biases due to uneven class distribution.

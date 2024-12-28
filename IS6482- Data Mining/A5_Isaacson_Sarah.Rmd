@@ -1,0 +1,361 @@
+---
+title: "A5_Isaacson_Sarah"
+author: "Sarah Isaacson"
+date: "2024-06-20"
+output: 
+  html_document:
+    number_sections: yes
+    toc: yes
+editor_options: 
+  chunk_output_type: inline
+---
+
+
+# Initial setup & Loading Libraries 
+
+```{r Set up and import data knit}
+
+
+# Install caret, RWeka, kernlab, rminer, matrixStats, and knitr packages.
+
+knitr::opts_chunk$set(echo = T, warning = F)
+options(rgl.useNULL = TRUE)
+library(caret)
+library(rpart)
+library(rpart.plot)
+library(rJava)
+library(RWeka)
+library(kernlab)
+library(rminer)
+library(matrixStats)
+library(knitr)
+library(tictoc) 
+library(tidyverse)
+library(psych)
+tic()
+
+
+
+```
+
+# Task I
+## Package load, data import, inspection, and partitioning
+
+```{r Package load}
+
+
+cloud_wd <- getwd()
+setwd(cloud_wd)
+
+cd <- read.csv(file = "NA_sales_filtered.csv", stringsAsFactors = F) 
+
+#Removing name Field
+cd_new <-  cd %>% select(-Name)
+#mutating character Variables to Factor Variables
+cd_new <- cd_new %>%
+  mutate(                          #note to remember - mutate is for changing the values in the columns
+    Platform = factor(Platform),
+    Genre = factor(Genre),
+    Rating = factor(Rating)
+  )
+
+# Data Partition with 70% Train Data
+set.seed(100)
+inTrain <- createDataPartition(cd_new$NA_Sales, p = 0.70, list=FALSE)
+train_target <- cd_new[inTrain,8]
+test_target <- cd_new[-inTrain,8]
+train_input <- cd_new[inTrain,-8]
+test_input <- cd_new[-inTrain,-8]
+metrics_list <- c("MAE","RMSE","MAPE","RMSPE","RAE","RRSE","R2")
+
+
+```
+
+# Code chunk 2 - Build and evaluate neural network models for numeric prediction tasks
+
+
+## A. Build and evaluate MLP models for numeric prediction with the video game sales data (imported and prepared in 1B).
+
+## i. Build an MLP model on MultilayerPerceptron()’s default setting on the training set. Evaluate the model performance on the training set and testing set.
+
+## ii. Build a two-hidden-layer MLP model and change one of the other hyper-parameter values – e.g. the learning rate on the training set. Evaluate the model performance on the training set and testing set.
+
+```{r MLP w/ Default Settings}
+
+# Designating a shortened name as MLP for the MultilayerPercentron ANN method in RWeka
+
+MLP <- make_Weka_classifier("weka/classifiers/functions/MultilayerPerceptron")
+
+#Build an MLP model on MultilayerPerceptron()’s default setting on the training set
+pred_model <- MLP(train_target ~ .,data = train_input)
+
+#Evaluation of Train Model
+mlp_train_model <- predict(pred_model, train_input)
+mmetric(train_target,mlp_train_model,metrics_list)
+
+#Evaluation of Test Model
+mlp_test_model <- predict(pred_model, test_input)
+mmetric(test_target,mlp_test_model,metrics_list)
+
+```
+
+# Two-hidden-layer MLP model
+```{r MLP with Two Hidden layers}
+
+# Modified MLP Model with two hidden layers and learning rate of 0.04
+pred_model_new <- MLP(train_target ~ .,data = train_input,control = Weka_control(L=0.04,H="2,2"))
+
+# Evaluation of Train Model
+mlp_train_model2 <- predict(pred_model_new, train_input)
+mmetric(train_target,mlp_train_model2,metrics_list)
+
+# Evaluation of Test Model
+mlp_test_model2 <- predict(pred_model_new, test_input)
+mmetric(test_target,mlp_test_model2,metrics_list)
+
+```
+
+# Code chunk 3 - Build and evaluate SVM (ksvm) models for numeric prediction tasks 
+# i. Build a model on ksvm()’s default setting on the training set. Evaluate the model performance on the training set and testing set.
+
+```{r KSVM with Default Settings}
+#Build an ksvm default setting on the training set
+pred_model_kvsm <- ksvm(train_target ~ .,data = train_input)
+
+#Evaluation of Train Model
+ksvm_train_model <- predict(pred_model_kvsm, train_input)
+mmetric(train_target,ksvm_train_model,metrics_list)
+
+#Evaluation of Test Model
+ksvm_test_model <- predict(pred_model_kvsm, test_input)
+mmetric(test_target,ksvm_test_model,metrics_list)
+```
+
+# Build a ksvm model using a different kernel function on the training set. Use the default C value. Evaluate the model performance on the training set and testing set.
+
+```{r ksvm model using a different kernel function}
+
+#ksvm model using a different kernel function on the training set
+pred_model_kvsm_kernel <- ksvm(train_target ~ .,data = train_input,kernel = 'anovadot')
+
+#Evaluation of Train Model
+ksvm_train_model1 <- predict(pred_model_kvsm_kernel, train_input)
+mmetric(train_target,ksvm_train_model1,metrics_list)
+
+#Evaluation of Test Model
+ksvm_test_model1 <- predict(pred_model_kvsm_kernel, test_input)
+mmetric(test_target,ksvm_test_model1,metrics_list)
+```
+
+# iii. Build a ksvm model using a different cost value (i.e. C= c, where c>1) on the training set. Evaluate the model performance on the training set and testing set.
+
+```{r KSVM with diff cost value}
+
+# Build a ksvm model using a different cost value (i.e. C= c, where c>1) on the training set. 
+pred_model_kvsm_cost <- ksvm(train_target ~ .,data = train_input, C=8)
+
+# Evaluation of Train Model
+ksvm_train_model2 <- predict(pred_model_kvsm_cost, train_input)
+mmetric(train_target,ksvm_train_model2,metrics_list)
+
+# Evaluation of Test Model
+ksvm_test_model2 <- predict(pred_model_kvsm_cost, test_input)
+mmetric(test_target,ksvm_test_model2,metrics_list)
+
+```
+
+# Code chunk 4 - Build and evaluate knn (IBk) models for numeric prediction tasks 
+# Build and evaluate IBk models for numeric prediction with the video game sales data (imported and prepared in 1B).
+# i. Build a model on IBk()’s default setting on the training set. Evaluate the model performance on the training set and testing set.
+
+```{r IBK with Default setting}
+
+# Build an IBK default setting on the training set
+pred_model_IBk <- IBk(train_target ~ .,data = train_input)
+
+# Evaluation of Train Model
+IBk_train_model <- predict(pred_model_IBk, train_input)
+mmetric(train_target,IBk_train_model,metrics_list)
+
+# Evaluation of Test Model
+IBk_test_model <- predict(pred_model_IBk, test_input)
+mmetric(test_target,IBk_test_model,metrics_list)
+```
+
+# ii. Build an IBk model using a different K value on the training set. Hold other parameters at the default setting. Evaluate the model performance on the training set and testing set.
+```{r IBK with different kernel function, K}
+
+#IBk model using a different kernel function on the training set
+pred_model_IBk_kernel <- IBk(train_target ~ .,data = train_input,control = Weka_control(K=5))
+
+#Evaluation of Train Model
+IBk_train_model1 <- predict(pred_model_IBk_kernel, train_input)
+mmetric(train_target,IBk_train_model1,metrics_list)
+
+#Evaluation of Test Model
+IBk_test_model1 <- predict(pred_model_IBk_kernel, test_input)
+mmetric(test_target,IBk_test_model1,metrics_list)
+```
+
+```{r IBK with different kernel function, I}
+
+# Build a IBk model using a different cost value (i.e. C= c, where c>1) on the training set. 
+pred_model_IBk_cost <- IBk(train_target ~ .,data = train_input,control = Weka_control(I=T))
+
+#Evaluation of Train Model
+IBk_train_model2 <- predict(pred_model_IBk_cost, train_input)
+mmetric(train_target,IBk_train_model2,metrics_list)
+
+#Evaluation of Test Model
+IBk_test_model2 <- predict(pred_model_IBk_cost, test_input)
+mmetric(test_target,IBk_test_model2,metrics_list)
+
+```
+
+## IBk model using a different kernel function ( X = T)
+
+```{r IBK with different kernel function, X}
+
+
+# IBk model with weighted voting (I=TRUE)
+pred_model_IBk_weighted <- IBk(train_target ~ ., data = train_input, control = Weka_control(I=TRUE))
+
+# Evaluation on Training Set
+IBk_train_model_weighted <- predict(pred_model_IBk_weighted, train_input)
+mmetric(train_target, IBk_train_model_weighted, metrics_list)
+
+# Evaluation on Testing Set
+IBk_test_model_weighted <- predict(pred_model_IBk_weighted, test_input)
+mmetric(test_target, IBk_test_model_weighted, metrics_list)
+
+
+```
+
+# Cross-validation function for numeric prediction models
+
+## Defining Cross Validation Function
+```{r Cross Validation}
+
+# Defining a cross validation function.
+cv_function <- function(cd, target, nFolds, seedVal, prediction_method, metrics_list)
+{
+  
+  set.seed(seedVal)
+  folds = createFolds(cd[,target],nFolds) 
+  
+  # perform cross validation
+  cv_results <- lapply(folds, function(x)
+  { 
+    test_target <- cd[x,target]
+    test_input  <- cd[x,-target]
+
+    train_target <- cd[-x,target]
+    train_input <- cd[-x,-target]
+
+    prediction_model <- prediction_method(train_target~.,train_input) 
+    pred<- predict(prediction_model,test_input)
+    return(mmetric(test_target,pred,metrics_list))
+  })
+  
+  # Generating means and sds and showing cv results, means and sds using kable
+  cv_results_m <- as.matrix(as.data.frame(cv_results))
+  cv_mean<- as.matrix(rowMeans(cv_results_m))
+  cv_sd <- as.matrix(rowSds(cv_results_m))
+  colnames(cv_mean) <- "Mean"
+  colnames(cv_sd) <- "Standard Deviation"
+  cv_all <- cbind(cv_results_m, cv_mean, cv_sd)
+  kable(t(cv_all),digits=2)
+}
+
+```
+
+# Code chunk 5 & 6 - Cross-validation function for numeric prediction models &  Code chunk 6 - 3 fold cross-validation of MLP, ksvm and IBk models
+
+```{r Cross validation using 3 folds}
+
+#MLP
+cv_function(
+  cd=cd_new,
+  target = 8,
+  nFolds = 3,
+  seedVal = 100,
+  prediction_method = MLP,
+  metrics_list= metrics_list
+)
+
+#Ksvm
+cv_function(
+  cd=cd_new,
+  target = 8,
+  nFolds =3,
+  seedVal = 100,
+  prediction_method = ksvm,
+  metrics_list= metrics_list
+)
+
+#IBK
+cv_function(
+  cd=cd_new,
+  target = 8,
+  nFolds =3,
+  seedVal = 100,
+  prediction_method = IBk,
+  metrics_list= metrics_list
+)
+
+
+```
+
+# Task II Reflections
+ 
+MLP: The MLP model benefited from increased complexity with two hidden layers and a slightly higher learning rate, leading to improved predictive accuracy. However, there's room for further optimization, particularly by exploring different learning rates and potentially regularization techniques to prevent overfitting.
+
+The MLP model with two hidden layers and a learning rate 0.04 shows improvements in MAE from 0.37 to 0.23 and increased R^2 from 0.27 to 0.40. 
+
+KSVM: The KSVM model performed well with default settings. While experimenting with different kernel functions and cost values didn't significantly improve performance, it gave a significant decrease in the value of R2 in test data when we changed the kernel and the cost factor for the model.
+
+IBK:The k-NN model exhibited strong performance on the training data but struggled to generalize to new data, suggesting overfitting. This could be addressed by increasing the number of neighbors (K) or employing feature selection to reduce model complexity. The IBK model had a high R2 in the train set and an worse performance in the test set even when we changed our parameters and kernel functions, which led to overfitting. 
+
+
+
+With a mean MAE of 0.33 and a mean RMSE of 0.47, the MLP model performs poorly; nevertheless, its high MAPE of 339.16 and RMSPE of 77.14 indicate significant inaccuracy. These high percentage errors imply that the model would need help producing accurate predictions. There may be space for improvement, as the R2 value is only 0.21. The high MAPE and RMSPE values highlight the need for additional fine-tuning to improve the model's predictive ability, even though performance is consistent across folds.
+
+The KSVM model, on the other hand, shows a significant improvement over the MLP model. The higher R2 value of 0.40 indicates that the KSVM model fits the data more accurately, with lower MAE (0.21) and RMSE (0.40). The lower MAPE (130.34) and RMSPE (32.26) values indicate a significant drop in percentage errors, indicating a more dependable predictive performance. 
+
+The IBK model has the highest MAE (0.31) and RMSE (0.54), suggesting that its prediction accuracy may be limited. Compared to the KSVM model, the R2 value of 0.15 shows a poorer fit to the data. The higher degree of inaccuracy indicated by the elevated MAPE (227.01) and RMSPE (78.43) values raises the possibility that the IBK model will need help capturing the underlying patterns in the data.
+
+Additional questions:
+
+1. Using IBk model performance results. Describe the parameter changes and their impact (e.g. significantly increase or decrease) on performance metrics of numeric prediction models. Discuss the reasons for these performance changes?
+
+Changing K (Number of Neighbors): Increasing K from the default led to a slight improvement in performance on the training set across most metrics (lower MAE, RMSE, MAPE, RMSPE, higher R^2). However, the test set performance slightly worsened. This suggests that while a larger K can help reduce overfitting on the training data, it might lead to underfitting on unseen data.
+
+Using weighted voting (I=T) led to a further slight improvement on the training set compared to K=5, but again, the test set performance did not improve significantly. 
+
+2. Did you notice a difference in the runtime in using IBk and the other two? Why might IBk be different? What are the differences in how the algorithms operate?
+
+
+Yes, IBk (k-Nearest Neighbors) is generally slower than KSVM (Support Vector Machines) and MLP (Multi-Layer Perceptron) models, especially with larger datasets. This is because:
+
+IBk (k-NN): k-NN doesn't build an explicit model during training. Instead, it stores all training instances and calculates distances to neighbors at prediction time. This makes prediction computationally expensive, especially with a large number of instances or features. Kinda lazy?
+
+KSVM: build a model during training by finding the optimal hyperplane that separates the classes. Prediction involves evaluating new instances against this hyperplane, which is relatively fast.
+
+MLP: MLPs are neural networks that learn complex relationships between features and the target variable during training. Prediction involves passing new instances through the trained network, and fast.
+
+
+
+3. In an emergency situation your manager needs you to generate a prediction by the end of the work day. Accuracy is important but equally so is getting the prediction ready as soon as possible. How would you tackle this situation using black box models?
+
+
+
+
+In this scenario, I would recommend using the KSVM model with default settings. 
+
+Speed: KSVM models can be faster than IBk models, especially for larger datasets. This is crucial when time is limited.
+
+Reasonable Accuracy: The KSVM model with default settings demonstrated good performance on both the training and test sets, indicating a balance between fitting the data and generalizing to new instances.
+
+Simplicity: Using default settings avoids the need for time-consuming hyperparameter tuning, which is not feasible in an emergency.
+
+While the MLP model with two hidden layers and a learning rate of 0.04 showed slightly better performance on the training set, the difference might not be significant enough to justify the additional time required for training and potential hyperparameter tuning. The KSVM model offers a good compromise between speed and accuracy, making it the most practical choice in a time-sensitive situation.

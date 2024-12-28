@@ -1,0 +1,177 @@
+---
+title: "Untitled"
+author: "Matt Pecsok"
+date: "2023-07-24"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# fitting non-linear data
+
+
+Below we generate a parabola that represents the relationship between some predictor and a continuous target variable. We then fit multiple numeric prediction methods to demonstrate their ability to fit the non-linear data. 
+
+Remember, we are taking model defaults for all of these models. Use some caution when interpreting the graph below. Just because one model has performed worse than another doesn't mean that it will always perform worse. A new hyperparameter combination may well correct some of the fitting issues.
+
+
+```{r generate parabola data}
+
+# Load required library
+#install.packages("ggplot2")  # Uncomment and run this line if ggplot2 is not installed
+library(ggplot2)
+library(rpart)
+library(RWeka)
+library(kernlab)
+
+# Set a seed for reproducibility
+set.seed(42)
+
+# Number of rows
+num_rows <- 100
+
+# Generate data with a parabolic relationship
+data <- data.frame(
+  x1 = seq(-10, 10, length.out = num_rows),
+  target = seq(-10, 10, length.out = num_rows) ^ 2 + rnorm(num_rows, mean = 0, sd = 10)
+)
+
+# Print the first few rows of the data
+head(data)
+
+```
+
+```{r plot the predictions from models with data}
+# Plot the data
+ggplot(data, aes(x = x1, y = target)) +
+  geom_point() +
+  labs(title = "Scatter Plot of x1 vs. target",
+       x = "x1",
+       y = "target")
+
+MLP <- make_Weka_classifier("weka/classifiers/functions/MultilayerPerceptron")
+
+rpart_model <- rpart(target ~.,data=data)
+lm_model <- lm(target ~ x1, data = data)
+m5p_model <- M5P(target ~ x1, data = data)
+
+mlp_model <- MLP(target ~ x1, data = data)
+ksvm_model <- ksvm(target ~ x1, data = data)
+
+
+
+# Create a new data frame for predictions
+predictions_data <- data.frame(x1 = seq(-10, 10, length.out = 100))
+
+# Make predictions with the models
+predictions_data$rpart_pred <- predict(rpart_model, newdata = predictions_data)
+predictions_data$lm_pred <- predict(lm_model, newdata = predictions_data)
+predictions_data$m5p_pred <- predict(m5p_model, newdata = predictions_data)
+
+predictions_data$mlp_pred <- predict(mlp_model, newdata = predictions_data)
+predictions_data$ksvm_pred <- predict(ksvm_model, newdata = predictions_data)[,1]
+```
+
+```{r graph the model predictions on parabola data}
+my_colors <- c("red", "blue", "green", "orange", "purple")
+
+# Plot the data and predictions
+ggplot(data, aes(x = x1, y = target)) +
+  geom_point() +
+  geom_line(data = predictions_data, aes(x = x1, y = rpart_pred, color = "rpart"), linetype = "dashed", linewidth = 1) +
+  geom_line(data = predictions_data, aes(x = x1, y = lm_pred, color = "lm"), linetype = "dashed", linewidth = 1) +
+  geom_line(data = predictions_data, aes(x = x1, y = m5p_pred, color = "m5p"), linetype = "dashed", linewidth = 1) +
+  geom_line(data = predictions_data, aes(x = x1, y = mlp_pred, color = "mlp"), linewidth = 1) +
+  geom_line(data = predictions_data, aes(x = x1, y = ksvm_pred, color = "ksvm"), linewidth = 1) +
+  
+  labs(title = "Scatter Plot of x1 vs. target with Predictions",
+       x = "x1",
+       y = "target") +
+  scale_color_manual(values = my_colors,labels = c("svm","lm","m5p","mlp","rpart"))
+```
+
+# data transformations to improve model fit
+
+Below we demonstrate how a data transformation can change which model may fit the best.
+
+We change the predictor to be a square of its original values. After this transformation it should be relatively clear that the linear model now fits quite well, even better than the other two tree models. If the function we are trying to approximate is linear a linear model should fit the best. If the function is non-linear models which allow for non-linear fits will often perform best.
+
+We use just a few of the models to demonstrate above. The point here is that the lm model is now best. 
+
+```{r transform the data before modeling}
+
+# Create a copy of the 'data' dataframe
+data_transformed <- data
+
+# Transform 'x1' by squaring it
+data_transformed$x1 <- data_transformed$x1 ^ 2
+
+ggplot(data_transformed, aes(x = x1, y = target)) +
+  geom_point() +
+  labs(title = "Scatter Plot of data_transformed x1 vs. target",
+       x = "x1",
+       y = "target")
+
+
+
+rpart_model_transformed <- rpart(target ~ x1, data = data_transformed)
+lm_model_transformed <- lm(target ~ x1, data = data_transformed)
+m5p_model <- M5P(target ~ x1, data = data_transformed)
+mlp_model <- MLP(target ~ x1, data = data_transformed)
+ksvm_model <- ksvm(target ~ x1, data = data_transformed)
+
+
+
+# Create a new data frame for predictions with transformed 'x1'
+predictions_data_transformed <- data.frame(x1 = seq(0, 100, length.out = 100))
+
+# Make predictions with the models using transformed 'x1'
+predictions_data_transformed$rpart_pred <- predict(rpart_model_transformed, newdata = predictions_data_transformed)
+predictions_data_transformed$lm_pred <- predict(lm_model_transformed, newdata = predictions_data_transformed)
+predictions_data_transformed$m5p_pred <- predict(m5p_model, newdata = predictions_data_transformed)
+predictions_data_transformed$mlp_pred <- predict(mlp_model, newdata = predictions_data_transformed)
+predictions_data_transformed$ksvm_pred <- predict(ksvm_model, newdata = predictions_data_transformed)
+
+
+predictions_data_transformed$target <- data_transformed$target
+```
+
+```{r graph predictions for linear data}
+
+# Plot the original data and predictions with transformed 'x1'
+ggplot(data_transformed, aes(x = x1, y = target)) +
+  geom_point() +
+  geom_line(data = predictions_data_transformed, aes(x = x1, y = rpart_pred, color = "rpart"), linetype = "dashed", linewidth = 1) +
+  geom_line(data = predictions_data_transformed, aes(x = x1, y = lm_pred, color = "lm"), linetype = "dashed", linewidth = 1) +
+  geom_line(data = predictions_data_transformed, aes(x = x1, y = m5p_pred, color = "m5p"), linetype = "dashed", linewidth = 1) +
+  geom_line(data = predictions_data_transformed, aes(x = x1, y = mlp_pred, color = "mlp"), linewidth = 1) +
+  geom_line(data = predictions_data_transformed, aes(x = x1, y = ksvm_pred, color = "ksvm"), linewidth = 1) +
+  
+  labs(title = "Scatter Plot of x1 vs. target with Predictions",
+       x = "x1",
+       y = "target") +
+  scale_color_manual(values = my_colors,labels = c("svm","lm","m5p","mlp","rpart"))
+```
+
+
+# identifying overfitting
+
+It's worth calling out how badly the SVM model overfit the data. The relationship between x and y is linear (I know because I created it). Yet the SVM decided to fit it in a very non-linear fashion even though a linear fit would have worked great. It did so to reduce errors on this dataset and it did a great job! The only problem is that it severely overfit the data.
+
+The takeaway here is that some models may well reduce errors on the training data more than others, but that reduction in errors may actually make the model worse by creating a model that is modeling the small variations in the distribution of the target that are actually just random fluctuations in the data! When we model we want to capture the true function that generated the data and ignore the random noise that is also present in the data. 
+
+```{r overfitting with svm}
+
+ggplot(data_transformed, aes(x = x1, y = target)) +
+  geom_point() +
+  geom_line(data = predictions_data_transformed, aes(x = x1, y = lm_pred, color = "lm"), linetype = "dashed", linewidth = 1) +
+  geom_line(data = predictions_data_transformed, aes(x = x1, y = ksvm_pred, color = "ksvm"), linewidth = 1) +
+  
+  labs(title = "Scatter Plot of x1 vs. target with Predictions",
+       x = "x1",
+       y = "target") +
+  scale_color_manual(values = my_colors,labels = c("svm","lm","m5p","mlp","rpart"))
+
+```

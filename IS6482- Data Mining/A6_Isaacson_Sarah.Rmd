@@ -1,0 +1,220 @@
+---
+title: "A6_Isaacson_Sarah"
+author: "Sarah Isaacson"
+date: "2024-07-06"
+output: 
+  html_document: 
+    number_sections: yes
+    toc: yes
+    highlight: tango
+    theme: paper
+editor_options: 
+  chunk_output_type: inline
+  
+---
+
+# Initial setup & Loading Libraries
+
+```{r Set up and import data knit}
+
+# Load the following packages. Install them first if necessary.
+
+knitr::opts_chunk$set(echo = T, warning = F, Message=F)
+options(rgl.useNULL = TRUE)
+library(C50)
+library(caret)
+library(rpart)
+library(rpart.plot)
+library(rJava)
+library(RWeka)
+library(kernlab)
+library(rminer)
+library(matrixStats)
+library(knitr)
+library(tictoc) 
+library(tidyverse)
+library(psych)
+library(arules)
+tic()
+
+```
+
+
+# Code chunk 1 - Package load, data import, inspection, and partitioning
+
+## Package Loading and Walmart Data
+
+```{r Package load, data import, inspect, and partitio}
+
+# Importing Data from input file
+cloud_wd <- getwd()
+setwd(cloud_wd)
+
+cd <- read.csv(file = "Walmart_visits_7trips.csv", stringsAsFactors = F) 
+
+# Structure of Input File 
+str(cd)
+
+# Mutating chr variales and target variable
+cd_new <- cd %>%
+  mutate(DOW = factor(DOW),
+         TripType = factor(TripType))
+
+# Summary of Input Data
+summary(cd_new)
+```
+
+## Correlation Analysis (pairs.panels from psych)
+
+```{r Correlation Analysis}
+pairs.panels(cd_new)
+```
+
+## Build a descriptive C5.0 decision tree
+```{r C5.0 Decision Tree, fig.height=9, fig.width=20}
+
+# Building a C5.0 to keep leaves less than 15
+
+tree_1 <- C5.0(TripType ~ .,data=cd_new,control = C5.0Control(CF = 0.2)) #tried .3 and .2 and .2 seems best. 
+tree_1
+
+# Decision Tree Plot
+plot(tree_1)
+
+# Decision Model Summary
+summary(tree_1)
+
+# Confusion Matrix
+preda <- predict(tree_1,cd_new)
+mmetric(cd_new$TripType,preda,metric="CONF")$conf
+```
+
+# Code chunk 2 - Use SimpleKMeans clustering  to understand visits 
+## Removing target variable TripType
+```{r Removing target variable}
+
+# Storing target variables level count
+TripType.levels <- unique(cd_new$TripType)
+
+#Removing the Field
+cd_rem <-  cd_new %>% select(-TripType)
+
+```
+
+## Random Cluster with Euclidean Distance: 
+
+>Generate clusters with the default (i.e. random) initial cluster assignment and the default distance function (Euclidean). The number of clusters equals to TripType.levels. Show the clustering information with the standard deviations and the centroids of the clusters.
+```{r Clustering using K means}
+Wkmeans <- SimpleKMeans(cd_rem, Weka_control(N=length(TripType.levels), init = 0, V=TRUE))
+Wkmeans
+
+```
+
+>notes for self: It took 14 iterations for the k-Means algorithm to converge to a stable solution. This means that the algorithm repeatedly adjusted the cluster assignments and centroids until the clusters stopped changing significantly.
+>The value of 3983.33 indicates how well the data points within each cluster are grouped around their centroids. Lower values of WSS generally indicate better clustering, as it means the points are closer to their respective cluster centers.
+>Interpreting the Clusters: Cluster 0 and 6: Friday shoppers with moderate basket sizes.
+Cluster 1 and 3: Wednesday shoppers with smaller baskets.
+Cluster 2: Thursday shoppers with moderate basket sizes.
+Cluster 4: Sunday shoppers with moderate basket sizes.
+Cluster 5: Saturday shoppers with the largest baskets and visiting the most departments.
+>Key Insights: Day of Week: There's a clear pattern in the day of the week people prefer to shop, with distinct clusters forming around different days.
+Basket Size Variation: The size of shopping baskets varies significantly across clusters, with Saturday shoppers being the biggest spenders.
+Department Preferences: The number of departments visited also varies, suggesting different shopping behaviors across clusters.
+
+>Keep the number of clusters at TripType.levels and the Euclidean distance function. Change the initial cluster assignment method to the Kmeans++ method. Cluster the visits again and show the standard deviations and the centroids of the clusters.
+
+
+## Kmeans++ Method for Clustering
+
+```{r Kmeans++ Clustering}
+Wkmeans2 <- SimpleKMeans(cd_rem, Weka_control(N=length(TripType.levels), init = 1, V=TRUE))
+Wkmeans2
+```
+
+>Notes to self: In random initialization, initial cluster centers are chosen randomly, which may sometimes result in less than ideal clustering outcomes. K-means++, on the other hand, improves upon this by strategically spreading out initial centroids based on their distance from existing ones, leading to potentially better and faster results. While both clustering methods group customers based on days of the week, there are some differences: 
+>Random Initialization: Produced one cluster dominated by Saturday shoppers with large baskets.
+>k-means++: Created more clusters around Sunday shoppers with varying basket sizes and department visits. Which is better?
+
+
+## Manhattan distance for Clustering
+
+>Keep the number of clusters at TripType.levels and the initial cluster assignment method to be the Kmeans++ method. Change the distance function to "weka.core.ManhattanDistance". Cluster the visits again and show the standard deviations and the centroids of the clusters.
+```{r Kmeans++ Clustering with Manhattan Distance}
+
+Wkmeans3 <- SimpleKMeans(cd_rem, Weka_control(N=length(TripType.levels), init = 1, V=TRUE, A= "weka.core.ManhattanDistance"))
+Wkmeans3
+
+```
+
+>NOTES to self: Manhattan distance measures distance by summing the absolute differences along each axis, like navigating city blocks, rather than taking the shortest path (Euclidean distance).  This approach is often preferred when dealing with high-dimensional data or discrete features, where the straight-line distance may not be the most meaningful representation.Given the differences in results and the potential for discrete features in my data, I will stick with Manhattan for my personal distance function next.
+
+## Using Custom parameters for Clustering (Manhattan)
+
+```{r Custom Clustering}
+Wkmeans4 <- SimpleKMeans(cd_rem, Weka_control(N=length(TripType.levels), init = 0, V=TRUE, A="weka.core.ManhattanDistance"))
+Wkmeans4
+
+```
+>notes to self: Both methods found meaningful groups of shoppers based on what day of the week they shop and their overall behavior. The main difference is that the groups aren't exactly the same for each method, and how tightly the shoppers within each group resemble each other varies a bit.
+
+
+# Code Chunk 3 - Market Basket Analysis with the Walmart dept baskets 
+
+## Importing Data
+
+```{r Importing Transactional Data}
+
+# Reading Transactions
+
+Dept_baskets <- read.transactions("Walmart_baskets_1week.csv", format="single", sep = ",", header = TRUE, cols=c("VisitNumber","DepartmentDescription"))
+
+
+```
+
+## Inspecting first 15 transactions
+
+```{r inspecting Transactions}
+
+inspect(Dept_baskets[1:15])
+
+```
+
+##Item Frequency Plot
+
+```{r ItemFreqPlot}
+
+sort(itemFrequencyPlot(Dept_baskets,topN = 15,type='relative'), decreasing = TRUE)
+
+```
+
+## Associate Rule Mining
+### Generate 50 - 100 Rules 
+
+>Use the apriori command to generate about 50 to 100 association rules from the input data. Set your own minimum support and confidence threshold levels. Remember if the thresholds are too low, you will generate more rules than desired, or if you set them too high, you may not generate any or a sufficient number of rules. Show the rules in the descending order of their lift values.
+
+```{r Associate Rule Mining 1}
+
+rules <- apriori(Dept_baskets,parameter = list(support = 0.033, confidence = 0.1, minlen =2 ))
+rules
+
+inspect(sort(rules, by = "lift"), decreasing = TRUE) 
+```
+
+
+
+>Similar to the last task, use the apriori command now to generate about 100 - 200 association rules from the input data. Set your own minimum support and confidence threshold levels. Show the rules in the descending order of their lift values.
+
+## Generate 100-200 Rules 
+
+```{r Associate Rule Mining 2}
+
+rules2 <- apriori(Dept_baskets,parameter = list(support = 0.02, confidence = 0.08, minlen=2))
+rules2
+
+inspect(sort(rules2, by = "lift"), decreasing = TRUE) 
+
+```
+
+# Reflections
+
+

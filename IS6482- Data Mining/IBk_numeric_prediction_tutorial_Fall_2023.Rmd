@@ -1,0 +1,404 @@
+---
+title: "IBk (kNN) numeric prediction tutorial"
+author: "Matt Pecsok"
+output: 
+  html_document:
+    number_sections: yes
+    toc: yes
+editor_options: 
+  chunk_output_type: inline
+---
+# IBk documentation:
+
+See IBk documentation and parameter settings at 
+http://weka.sourceforge.net/doc.dev/weka/classifiers/lazy/IBk.html
+
+Some of the setting options are:
+
+ -I
+  Weight neighbours by the inverse of their distance  (use when k > 1)
+
+ -F
+  Weight neighbours by 1 - their distance (use when k > 1)
+
+ -K <number of neighbors>
+  Number of nearest neighbours (k) used in classification.
+ (Default = 1)
+
+ -X
+   Select the number of nearest neighbours between 1
+   and the k value specified using hold-one-out evaluation
+   on the training data (use when k > 1)
+
+ -E
+  Minimize mean squared error rather than mean absolute
+  error when using -X option with numeric prediction.
+
+
+# Part 1: Initial setup and simple IBk examples
+
+## Load packages and import insurance dataset
+```{r Set up and import data}
+# Load the following packages. Install them first if necessary.
+
+library(caret)
+library(RWeka)
+library(rminer)
+library(matrixStats)
+library(knitr)
+library(tictoc) 
+library(tidyverse)
+tic()
+
+# import data
+cloud_wd <- getwd()
+setwd(cloud_wd)
+insurance <- read.csv(file = "insurance.csv", stringsAsFactors = TRUE)
+
+###  Set up cv parameters
+
+df <- insurance
+target <- 7
+seedVal <- 500
+metrics_list <- c("MAE","RMSE","MAPE","RMSPE")
+```
+
+```{r}
+str(insurance)
+```
+```{r}
+summary(insurance)
+```
+
+
+# Part 1.
+simple train test split using createDataPartition
+
+```{r split to train test}
+set.seed(500)
+inTrain <- createDataPartition(y=insurance$expenses, p = 0.70, list=FALSE)
+train_target <- insurance[inTrain,7]
+test_target <- insurance[-inTrain,7]
+train_input <- insurance[inTrain,-7]
+test_input <- insurance[-inTrain,-7]
+
+mean(train_target)
+mean(test_target)
+
+histogram(train_target)
+histogram(test_target)
+```
+
+## Examples of IBK settings on train as opposed to test sets. 
+
+Recall the distance between an instance and itself is 0. Therefore if we attempt to predict for an observation that itself is already in the training set with a K = 1 we will always select the observation itself as the nearest neighbor. 
+
+When using K = 1 on the training set we will then achieve an MAE = 0 (or if classification 100% accuracy)
+
+## MAE for K = 1
+
+```{r Simple IBk examples}
+
+# K = 1
+
+knn_model_k_1 <- IBk(train_target ~ .,data = train_input,control = Weka_control(K=1))
+knn_model_k_1
+```
+
+```{r k1 train}
+insample_pred <- predict(knn_model_k_1, train_input)
+mmetric(train_target, insample_pred, metrics_list)
+```
+
+```{r k1 test}
+test_pred <- predict(knn_model_k_1, test_input)
+mmetric(test_target, test_pred, metrics_list)
+```
+
+ Training errors measure the difference between the true value and the estimated value of each training instance's target variable.
+Training errors for fixed K skew low because a training instance itself often is identified as its closest nearest neighbors. 
+
+## MAE for K = 5
+
+```{r}
+knn_model_k_5 <- IBk(train_target ~ .,data = train_input,control = Weka_control(K=5))
+knn_model_k_5
+```
+
+```{r k5 train}
+insample_pred <- predict(knn_model_k_5, train_input)
+mmetric(train_target, insample_pred, metrics_list)
+```
+
+```{r k5 test}
+test_pred <- predict(knn_model_k_5, test_input)
+mmetric(test_target, test_pred, metrics_list)
+```
+
+
+## Weighted distance
+
+## MAE for K = 1 and I = TRUE
+
+```{r Simple IBk examples I=TRUE}
+
+# K = 1
+
+knn_model_k1_itrue <- IBk(train_target ~ .,data = train_input,control = Weka_control(K=1,I=TRUE))
+knn_model_k1_itrue
+```
+
+```{r k1 train I=TRUE}
+insample_pred <- predict(knn_model_k1_itrue, train_input)
+mmetric(train_target, insample_pred, metrics_list)
+```
+
+```{r k1 test I=TRUE}
+test_pred <- predict(knn_model_k1_itrue, test_input)
+mmetric(test_target, test_pred, metrics_list)
+```
+
+ Training errors measure the difference between the true value and the estimated value of each training instance's target variable.
+Training errors for fixed K skew low because a training instance itself often is identified as its closest nearest neighbors. 
+
+## MAE for K = 5 and I = TRUE
+
+```{r}
+knn_model_k5_itrue <- IBk(train_target ~ .,data = train_input,control = Weka_control(K=5,I=TRUE))
+knn_model_k5_itrue
+```
+
+```{r k5 train I=TRUE}
+insample_pred <- predict(knn_model_k5_itrue, train_input)
+mmetric(train_target, insample_pred, metrics_list)
+```
+
+```{r k5 test I=TRUE}
+test_pred <- predict(knn_model_k5_itrue, test_input)
+mmetric(test_target, test_pred, metrics_list)
+```
+
+
+
+
+## MAE for K = 40, I = TRUE, X = TRUE.
+
+Try k from 1 to 40, using inverse of distance weights. 
+
+Demonstrating how to use the Leave one out cross-validation built into the IBk package to determine the best k.
+
+```{r X TRUE}
+knn_model_itrue_xtrue <- IBk(train_target ~ .,data = train_input,control = Weka_control(K=40,I=TRUE,X=TRUE))
+knn_model_itrue_xtrue
+```
+The model has chosen k = 3 to minimize the MAE. 
+
+```{r}
+insample_pred <- predict(knn_model_itrue_xtrue, train_input)
+mmetric(train_target, insample_pred, metrics_list)
+```
+
+```{r}
+test_pred <- predict(knn_model_itrue_xtrue, test_input)
+mmetric(test_target, test_pred, metrics_list)
+```
+
+
+# Part 2.
+
+Build and compare kNN models with fixed K and I. Examine model information and compare training and testing performance.
+
+
+
+## Define a named function cv_IBk for hold-out testing with parameters for K and I
+
+return the results as a dataframe for each cross validation.
+
+```{r Define cv_IBk}
+
+cv_IBk <- function(df, target, nFolds, seedVal, metrics_list, k, i)
+{
+# create folds using the assigned values
+
+set.seed(seedVal)
+folds = createFolds(df[,target],nFolds)
+
+# The lapply loop
+
+cv_results <- lapply(folds, function(x)
+{ 
+# data preparation:
+
+  test_target <- df[x,target]
+  test_input <- df[x,-target]
+  
+  train_target <- df[-x,target]
+  train_input <- df[-x,-target]
+  pred_model <- IBk(train_target ~ .,data = train_input,control = Weka_control(K=k,I=i))  
+  pred <- predict(pred_model, test_input)
+  train_pred <- predict(pred_model, train_input)
+  
+  return(mmetric(test_target,pred,metrics_list))
+})
+
+cv_results_m <- as.matrix(as.data.frame(cv_results))
+cv_mean<- as.matrix(rowMeans(cv_results_m))
+cv_sd <- as.matrix(rowSds(cv_results_m))
+colnames(cv_mean) <- "Mean"
+colnames(cv_sd) <- "Sd"
+cv_df <- data.frame(t(cbind(cv_mean,cv_sd))) %>% round(2)
+cv_df$param_K <- k
+cv_df$param_I <- as.logical(i)
+cv_df <- cv_df %>% rownames_to_column(var = "measure")
+cv_df
+}
+```
+
+
+
+
+## Call cross-validation with k=1 and I = FALSE
+
+```{r call cv_IBk_train and cv_IBk}
+cv_IBk(df, target, 3, seedVal, metrics_list, 1, FALSE)
+```
+
+
+## Call cross-validation with k=2 and I=FALSE
+```{r}
+cv_IBk(df, target, 3, seedVal, metrics_list, 2, FALSE)
+```
+
+## Call cross-validation with k=3 and I=FALSE
+```{r}
+cv_IBk(df, target, 3, seedVal, metrics_list, 3, FALSE)
+```
+
+# crossvalidation with I = TRUE
+
+
+```{r}
+cv_IBk(df, target, 3, seedVal, metrics_list, 1, TRUE)
+```
+
+
+```{r}
+cv_IBk(df, target, 3, seedVal, metrics_list, 2, TRUE)
+```
+
+```{r}
+cv_IBk(df, target, 3, seedVal, metrics_list, 3, TRUE)
+```
+
+```{r}
+cv_IBk(df, target, 3, seedVal, metrics_list, 4, TRUE)
+```
+
+```{r}
+cv_IBk(df, target, 3, seedVal, metrics_list, 5, TRUE)
+```
+```{r}
+cv_IBk(df, target, 3, seedVal, metrics_list, 6, TRUE)
+```
+```{r}
+cv_IBk(df, target, 3, seedVal, metrics_list, 7, TRUE)
+```
+
+```{r}
+cv_IBk(df, target, 3, seedVal, metrics_list, 8, TRUE)
+```
+```{r}
+cv_IBk(df, target, 3, seedVal, metrics_list, 38, TRUE)
+```
+
+# Part 3.
+
+Use a custom grid search to find our best hyperparameter combination. 
+
+## Build the grid
+
+```{r}
+# Create multiple vectors
+param_k <- c(seq(1,40))
+param_i <- c(FALSE, TRUE)
+
+# Generate a grid of all combinations
+grid <- expand.grid(param_k, param_i, stringsAsFactors = FALSE)
+
+colnames(grid) <- c("k","i")
+# Print the grid
+
+grid
+```
+
+## define a named function to loop through the grid
+
+This function will take the grid as input and call the cross validation function for each row in the grid. Finally, each cross validation result mean and standard deviation will be returned as a dataframe.
+
+```{r}
+
+run_grid_cv <- function(grid) {
+  results <- data.frame()
+  for (i in 1:nrow(grid)) {
+    row <- grid[i,]  # Get the i-th row
+    cv_result <- cv_IBk(df = df,target = target,nFolds = 5,seedVal =  seedVal,metrics_list =  metrics_list,k = row$k,i = row$i)
+    results <- rbind(results, cv_result)
+  }
+  return(results)
+}
+```
+
+## run the grid search, return a dataframe with the results. 
+
+```{r}
+cv_grid_results <- run_grid_cv(grid)
+```
+
+
+```{r}
+# pull the top 3 based on MAE
+
+cv_grid_results %>% 
+  filter(measure == 'Mean') %>% 
+  arrange(MAE) %>%
+  head(10)
+```
+
+```{r}
+# pull the top 10 based on MAPE
+
+cv_grid_results %>% 
+  filter(measure == 'Mean') %>% 
+  arrange(MAPE) %>%
+  head(10)
+```
+
+```{r}
+# pull the top 10 based on mean MAPE 
+# filter for I == FALSE 
+
+cv_grid_results %>% 
+  filter(measure == 'Mean',param_I == FALSE) %>% 
+  arrange(param_K) %>%
+  head(10)
+```
+
+# Part 4
+
+
+## Ablation Analysis (test feature removal)
+
+Here we systematically remove each feature from the model to see the impact.
+This allows us to get a sense of feature importance. 
+Some features cause the errors to rise substantially. Removing region actually improves the model. 
+
+```{r}
+cv_IBk(df, 7, 5, seedVal, metrics_list, 2, TRUE) # baseline
+cv_IBk(df[,-c(1)], 6, 5, seedVal, metrics_list, 2, TRUE)
+cv_IBk(df[,-c(2)], 6, 5, seedVal, metrics_list, 2, TRUE)
+cv_IBk(df[,-c(3)], 6, 5, seedVal, metrics_list, 2, TRUE)
+cv_IBk(df[,-c(4)], 6, 5, seedVal, metrics_list, 2, TRUE)
+cv_IBk(df[,-c(5)], 6, 5, seedVal, metrics_list, 2, TRUE)
+cv_IBk(df[,-c(6)], 6, 5, seedVal, metrics_list, 2, TRUE) # removing region appears to improve the model. slightly.
+```
+
